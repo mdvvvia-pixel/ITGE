@@ -1,0 +1,296 @@
+{
+  "project_overview": {
+    "name": "MATLAB Table-Graph Editor",
+    "description": "Приложение для редактирования числовых таблиц через интерактивные графики в стиле Excel 2003",
+    "version": "1.0.0",
+    "matlab_version": "R2021a+",
+    "framework": "App Designer"
+  },
+  
+  "file_structure": {
+    "root": "TableGraphEditor/",
+    "directories": [
+      "src/",
+      "test/",
+      "examples/",
+      "resources/",
+      "docs/"
+    ],
+    "files": {
+      "main_app": "src/TableGraphEditor.mlapp",
+      "support_functions": "src/helpers/",
+      "test_files": "test/test_*.m",
+      "example_data": "examples/example_data.mat",
+      "documentation": "docs/README.md"
+    }
+  },
+  
+  "coding_standards": {
+    "language": "MATLAB",
+    "style_guide": "MATLAB стандарт кодирования",
+    "naming_conventions": {
+      "variables": "camelCase",
+      "functions": "camelCase",
+      "classes": "PascalCase",
+      "constants": "UPPER_CASE",
+      "private_functions": "camelCase с префиксом _"
+    },
+    "file_header": {
+      "required": true,
+      "template": "%% Функция: {function_name}\n%% Описание: {description}\n%% Автор: {author}\n%% Дата: {date}\n%% Версия: {version}\n%% Входные параметры: {inputs}\n%% Выходные параметры: {outputs}\n"
+    }
+  },
+  
+  "app_designer_rules": {
+    "ui_components": {
+      "naming_prefix": {
+        "axes": "ax",
+        "table": "tbl",
+        "button": "btn",
+        "dropdown": "dd",
+        "label": "lbl",
+        "panel": "pnl",
+        "checkbox": "chk",
+        "radiobutton": "rb"
+      },
+      "layout": "Использовать grid layout для адаптивности",
+      "callbacks": "Все callback функции должны быть в одном файле .mlapp"
+    },
+    
+    "data_management": {
+      "properties": "Использовать private properties для хранения данных",
+      "state_management": "Хранить состояние в свойствах app, а не в глобальных переменных",
+      "history": "Реализовать undo/redo через массив структур"
+    }
+  },
+  
+  "core_functionality": {
+    "required_features": [
+      "Загрузка переменных из workspace",
+      "Отображение таблицы в uitable",
+      "Построение точечных графиков с отрезками",
+      "Перетаскивание точек мышью",
+      "Синхронизация таблицы и графика",
+      "Режимы редактирования: X, Y, XY",
+      "Добавление/удаление точек",
+      "Сохранение в workspace"
+    ],
+    
+    "graph_requirements": {
+      "type": "scatter plot with lines",
+      "markers": "использовать 'o' по умолчанию",
+      "line_style": "- (сплошная)",
+      "multiple_curves": "поддержка нескольких кривых на одном графике"
+    },
+    
+    "table_requirements": {
+      "editable": "все ячейки редактируемые",
+      "numeric_only": "валидация числовых значений",
+      "dependent_columns": "поддержка вычисляемых столбцов"
+    }
+  },
+  
+  "performance_rules": {
+    "graph_updates": "Использовать drawnow limitrate для частых обновлений",
+    "large_data": "Оптимизация для больших матриц (более 1000x1000)",
+    "memory": "Минимизация копирования данных"
+  },
+  
+  "error_handling": {
+    "validation": "Проверка входных данных",
+    "try_catch": "Использовать try-catch в callback функциях",
+    "user_messages": "Использовать uialert для сообщений об ошибках",
+    "graceful_degradation": "При ошибках сохранять работоспособность основных функций"
+  },
+  
+  "testing_requirements": {
+    "unit_tests": "Тестирование вспомогательных функций",
+    "integration_tests": "Тестирование взаимодействия компонентов",
+    "ui_tests": "Тестирование интерфейса (ручное)",
+    "test_data": "Использовать примеры в папке examples/"
+  },
+  
+  "documentation": {
+    "code_comments": "Комментировать сложные алгоритмы",
+    "help_text": "Добавить Tooltip к UI компонентам",
+    "user_guide": "Создать docs/USER_GUIDE.md",
+    "api_docs": "Документировать публичные функции",
+    "date_requirements": {
+      "mandatory": true,
+      "format": "YYYY-MM-DD",
+      "source": "system_date",
+      "description": "При создании или обновлении документов (task_*.md, PROJECT_DOCS.md и другие) ОБЯЗАТЕЛЬНО использовать текущую системную дату в формате YYYY-MM-DD",
+      "check_before_creation": "Перед созданием любого документа проверить системную дату командой date (Unix/Mac) или Get-Date (Windows) и использовать её в документе",
+      "applicable_files": [
+        "task_*.md",
+        "PROJECT_DOCS.md",
+        "FINAL_REQUIREMENTS.md",
+        "PROJECT_ANALYSIS_SUMMARY.md",
+        "docs/*.md",
+        "любые другие документы с полями Date или датой в заголовке"
+      ],
+      "examples": {
+        "task_file": "**Date:** 2024-12-19 (использовать текущую системную дату)",
+        "progress_log": "### 2024-12-19 (использовать текущую системную дату)",
+        "sign_off": "**Date:** 2024-12-19 (использовать текущую системную дату)"
+      }
+    }
+  },
+  
+  "development_workflow": {
+    "phases": [
+      {
+        "phase": "MVP",
+        "tasks": [
+          "Базовый интерфейс App Designer",
+          "Загрузка переменных из workspace",
+          "Отображение таблицы и графика",
+          "Перетаскивание точек (режим XY)",
+          "Синхронизация данных"
+        ]
+      },
+      {
+        "phase": "Расширенный функционал",
+        "tasks": [
+          "Режимы редактирования X/Y",
+          "Добавление/удаление точек",
+          "Зависимые столбцы",
+          "Undo/redo",
+          "Настройки отображения"
+        ]
+      },
+      {
+        "phase": "Интеграция",
+        "tasks": [
+          "Callback API для внешних программ",
+          "Экспорт/импорт данных",
+          "Дополнительные типы графиков"
+        ]
+      }
+    ],
+    
+    "code_review": {
+      "check_before_commit": [
+        "Все callback функции работают",
+        "Нет утечек памяти",
+        "Корректная обработка ошибок",
+        "Соблюдение стиля кодирования"
+      ]
+    },
+    
+    "git_commit_rules": {
+      "format": "<type>(<scope>): <subject>",
+      "types": {
+        "feat": "Новая функциональность",
+        "fix": "Исправление ошибки",
+        "docs": "Изменения в документации",
+        "style": "Форматирование кода",
+        "refactor": "Рефакторинг кода",
+        "test": "Добавление или изменение тестов",
+        "chore": "Обновление задач сборки, настроек"
+      },
+      "scopes": [
+        "app",
+        "graph",
+        "table",
+        "drag",
+        "data",
+        "ui",
+        "docs",
+        "config"
+      ],
+      "subject_rules": [
+        "Использовать повелительное наклонение",
+        "Первая буква строчная",
+        "Без точки в конце",
+        "Максимум 50 символов"
+      ],
+      "body_rules": [
+        "Объясняет что и почему, а не как",
+        "Отделяется от subject пустой строкой",
+        "Каждая строка максимум 72 символа"
+      ],
+      "template_file": ".gitmessage",
+      "examples": [
+        "feat(app): добавлена загрузка переменных из workspace",
+        "fix(graph): исправлена синхронизация таблицы и графика",
+        "docs: обновлена документация по API",
+        "refactor(drag): оптимизирован алгоритм перетаскивания точек"
+      ]
+    }
+  },
+  
+  "specific_implementation_rules": {
+    "drag_and_drop": {
+      "implementation": "Использовать WindowButtonMotionFcn, WindowButtonUpFcn",
+      "selected_point": "Хранить индекс выбранной точки в app.SelectedPoint",
+      "mode": "Режим редактирования хранить в app.EditMode",
+      "constraints": "Применять ограничения в зависимости от app.EditMode"
+    },
+    
+    "data_synchronization": {
+      "table_to_graph": "При изменении таблицы обновлять график",
+      "graph_to_table": "При изменении графика обновлять таблицу",
+      "batch_updates": "Минимизировать обновления при пакетных изменениях"
+    },
+    
+    "dependent_columns": {
+      "definition": "Хранить формулы зависимых столбцов в app.DependentFormulas",
+      "evaluation": "Пересчитывать при изменении базовых данных",
+      "circular_reference": "Проверять циклические зависимости"
+    }
+  },
+  
+  "ui_ux_rules": {
+    "intuitive_design": "Интерфейс должен быть понятен без инструкции",
+    "feedback": "Визуальная обратная связь при действиях",
+    "consistency": "Единый стиль всех элементов UI",
+    "accessibility": "Поддержка клавиатурных сокращений"
+  },
+  
+  "deployment": {
+    "packaging": "Возможность создать standalone приложение",
+    "dependencies": "Минимизация зависимостей",
+    "compatibility": "Поддержка R2021a и выше"
+  },
+  
+  "ai_assistance_rules": {
+    "when_to_ask": [
+      "При сложной обработке событий мыши",
+      "При оптимизации обновлений графиков",
+      "При реализации undo/redo системы",
+      "При работе с большими данными"
+    ],
+    
+    "code_generation_guidelines": {
+      "prefer_matlab_syntax": "Использовать идиоматичный MATLAB код",
+      "avoid_deprecated": "Не использовать устаревшие функции",
+      "use_appdesigner_features": "Использовать современные возможности App Designer"
+    },
+    
+    "document_creation_rules": {
+      "date_check_required": true,
+      "procedure": [
+        "Перед созданием или обновлением любого документа (task_*.md, PROJECT_DOCS.md и др.) ОБЯЗАТЕЛЬНО получить текущую системную дату",
+        "Использовать команду date для получения системной даты",
+        "Форматировать дату в формате YYYY-MM-DD",
+        "Вставить дату во все соответствующие поля документа (Date, Progress Log, Sign-off и т.д.)",
+        "НЕ использовать плейсхолдеры типа YYYY-MM-DD или примеры дат - только реальная текущая дата"
+      ],
+      "command_examples": {
+        "unix_mac": "date +%Y-%m-%d",
+        "windows": "powershell -Command \"Get-Date -Format 'yyyy-MM-dd'\"",
+        "python": "from datetime import date; print(date.today().isoformat())"
+      }
+    }
+  },
+  
+  "examples": {
+    "callback_template": "function ButtonPushed(app, event)\n    try\n        % Основной код\n        updateGraph(app);\n    catch ME\n        uialert(app.UIFigure, ME.message, 'Ошибка');\n    end\nend",
+    
+    "drag_handler": "function startDrag(app, src, event)\n    % Определить ближайшую точку\n    pointIndex = findClosestPoint(app, event.IntersectionPoint);\n    app.SelectedPoint = pointIndex;\n    app.StartDragPosition = event.IntersectionPoint;\n    % Установить callback для движения мыши\n    app.UIFigure.WindowButtonMotionFcn = @(src,event) dragPoint(app, event);\n    app.UIFigure.WindowButtonUpFcn = @(src,event) stopDrag(app);\nend",
+    
+    "graph_update": "function updateGraph(app)\n    % Обновить график с данными из таблицы\n    data = app.tbl.Data;\n    if app.currentPlotType == 'columns'\n        plotByColumns(app, data);\n    else\n        plotByRows(app, data);\n    end\n    drawnow limitrate;\nend"
+  }
+}
+

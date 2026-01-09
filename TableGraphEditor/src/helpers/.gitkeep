@@ -1,0 +1,8 @@
+# Placeholder для папки helpers
+
+В этой папке будут размещены вспомогательные функции:
+- findClosestPoint.m
+- updateSelection.m
+- validateNumericData.m
+- и другие helper функции
+

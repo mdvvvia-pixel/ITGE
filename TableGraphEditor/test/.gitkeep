@@ -1,0 +1,7 @@
+# Placeholder для папки test
+
+В этой папке будут размещены тесты:
+- test_findClosestPoint.m
+- test_dataValidation.m
+- и другие тестовые файлы
+
