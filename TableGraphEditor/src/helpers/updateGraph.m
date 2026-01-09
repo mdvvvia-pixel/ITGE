@@ -37,7 +37,10 @@ function updateGraph(app)
     
     % Предотвратить циклические обновления
     % Безопасная проверка isUpdating (может не быть инициализирован)
+    % ВАЖНО: Не блокировать обновления во время перетаскивания
     isUpdatingFlag = false;
+    isDraggingFlag = false;
+    
     if isprop(app, 'isUpdating')
         try
             isUpdatingFlag = app.isUpdating;
@@ -46,9 +49,28 @@ function updateGraph(app)
         end
     end
     
-    if isUpdatingFlag || isempty(currentData)
-        fprintf('Пропуск updateGraph: isUpdating=%d, empty(currentData)=%d\n', ...
-            isUpdatingFlag, isempty(currentData));
+    % Проверить, идет ли перетаскивание
+    if isprop(app, 'isDragging')
+        try
+            isDraggingFlag = app.isDragging;
+        catch
+            if isfield(app.UIFigure.UserData, 'appData') && ...
+               isfield(app.UIFigure.UserData.appData, 'isDragging')
+                isDraggingFlag = app.UIFigure.UserData.appData.isDragging;
+            end
+        end
+    else
+        if isfield(app.UIFigure.UserData, 'appData') && ...
+           isfield(app.UIFigure.UserData.appData, 'isDragging')
+            isDraggingFlag = app.UIFigure.UserData.appData.isDragging;
+        end
+    end
+    
+    % Если идет перетаскивание, разрешить обновление (не блокировать)
+    % Иначе блокировать, если уже идет обновление
+    if ~isDraggingFlag && isUpdatingFlag || isempty(currentData)
+        fprintf('Пропуск updateGraph: isUpdating=%d, isDragging=%d, empty(currentData)=%d\n', ...
+            isUpdatingFlag, isDraggingFlag, isempty(currentData));
         return;
     end
     
@@ -75,6 +97,16 @@ function updateGraph(app)
     end
     
     try
+        % Проверить минимальный размер данных
+        if size(currentData, 1) < 2 || size(currentData, 2) < 2
+            fprintf('⚠ updateGraph: недостаточно данных для построения графика (нужно минимум 2x2)\n');
+            cla(app.axPlot);
+            text(app.axPlot, 0.5, 0.5, 'Недостаточно данных для построения графика', ...
+                'HorizontalAlignment', 'center', 'Units', 'normalized');
+            drawnow limitrate;
+            return;
+        end
+        
         % Построить график в зависимости от типа
         if strcmp(plotType, 'columns')
             fprintf('Вызов plotByColumns...\n');
@@ -82,6 +114,9 @@ function updateGraph(app)
                 plotByColumns(app, currentData);
             else
                 fprintf('⚠ Функция plotByColumns не найдена\n');
+                cla(app.axPlot);
+                text(app.axPlot, 0.5, 0.5, 'Функция plotByColumns не найдена', ...
+                    'HorizontalAlignment', 'center', 'Units', 'normalized');
             end
         else
             fprintf('Вызов plotByRows...\n');
@@ -89,6 +124,9 @@ function updateGraph(app)
                 plotByRows(app, currentData);
             else
                 fprintf('⚠ Функция plotByRows не найдена\n');
+                cla(app.axPlot);
+                text(app.axPlot, 0.5, 0.5, 'Функция plotByRows не найдена', ...
+                    'HorizontalAlignment', 'center', 'Units', 'normalized');
             end
         end
         

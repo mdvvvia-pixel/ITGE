@@ -4,7 +4,40 @@
 %
 %   Добавьте после функции createComponents или в любом месте в methods (Access = private)
 %
-%   Дата обновления: 2026-01-08
+%   Дата обновления: 2026-01-09
+%
+% ═══════════════════════════════════════════════════════════════════════
+% СПИСОК ФУНКЦИЙ ДЛЯ ДОБАВЛЕНИЯ В .MLAPP ФАЙЛ:
+% ═══════════════════════════════════════════════════════════════════════
+%
+% ОБЯЗАТЕЛЬНО добавить в TableGraphEditor.mlapp:
+%
+% 1. startupFcn                    (строки ~10-75)
+% 2. ddVariableValueChanged        (строки ~93-156)
+% 3. ddPlotTypeValueChanged        (строки ~159-253)
+% 4. btnSaveButtonPushed          (строки ~265-360)
+% 5. tblDataSelectionChanged       (строки ~363-425)
+% 6. axPlotButtonDown             (строки ~459-716)  ← ДЛЯ ПЕРЕТАСКИВАНИЯ
+%
+% ПРИМЕЧАНИЕ: dragPoint, stopDrag и checkMouseMovement вынесены в отдельные файлы:
+% - helpers/dragPoint.m
+% - helpers/stopDrag.m  
+% - helpers/checkMouseMovement.m
+% НЕ нужно добавлять эти методы в .mlapp файл - они вызываются как helper функции!
+%
+% ═══════════════════════════════════════════════════════════════════════
+% ИНСТРУКЦИЯ ПО ДОБАВЛЕНИЮ:
+% ═══════════════════════════════════════════════════════════════════════
+%
+% 1. Откройте TableGraphEditor.mlapp в App Designer
+% 2. Перейдите в Code View
+% 3. Найдите секцию methods (Access = private)
+% 4. Скопируйте нужные функции из этого файла
+% 5. Для axPlotButtonDown: в Design View выберите axPlot → Property Inspector
+%    → ButtonDownFcn → установите: @app.axPlotButtonDown
+% 6. Сохраните файл
+%
+% ═══════════════════════════════════════════════════════════════════════
 
         % === Инициализация ===
         function startupFcn(app, varargin)
@@ -358,6 +391,377 @@
                 end
             end
         end
+        
+        % === Обработка выделения в таблице ===
+        function tblDataSelectionChanged(app, event)
+            % TBLDATASELECTIONCHANGED Обработчик изменения выделения в таблице
+            %   Обновляет выделенные столбцы/строки и перерисовывает график
+            %   Вызывает helper функцию updateSelection из helpers/
+            %
+            %   ВАЖНО: Этот callback должен быть назначен в Design View:
+            %   1. Выберите компонент tblData в Design View
+            %   2. В Property Inspector найдите "SelectionChangedFcn"
+            %   3. Установите: @app.tblDataSelectionChanged
+            %   4. Сохраните файл
+            %
+            %   Примечание: uitable.Selection содержит массив [row, col] для каждой
+            %   выделенной ячейки. Функция updateSelection извлекает уникальные
+            %   столбцы/строки и исключает столбец/строку X (используемые для координат)
+            
+            fprintf('tblDataSelectionChanged вызван\n');  % Отладочный вывод
+            
+            try
+                % Получить выделение из таблицы
+                if ~isprop(app, 'tblData') || ~isvalid(app.tblData)
+                    fprintf('⚠ tblData не найден или не валиден\n');
+                    return;
+                end
+                
+                selection = app.tblData.Selection;
+                fprintf('Выделение получено: %s\n', mat2str(selection));
+                
+                % Обновить выделение через helper функцию
+                % (извлекает уникальные столбцы/строки и исключает столбец/строку X)
+                if exist('updateSelection', 'file') == 2
+                    updateSelection(app, selection);
+                    fprintf('✓ Выделение обновлено\n');
+                else
+                    fprintf('⚠ Функция updateSelection не найдена\n');
+                    return;
+                end
+                
+                % Обновить график (только для выделенных столбцов/строк)
+                if exist('updateGraph', 'file') == 2
+                    fprintf('Обновление графика с учетом выделения...\n');
+                    updateGraph(app);
+                    fprintf('✓ График обновлен\n');
+                else
+                    fprintf('⚠ Функция updateGraph не найдена\n');
+                end
+                
+            catch ME
+                fprintf('Ошибка в tblDataSelectionChanged: %s\n', ME.message);
+                fprintf('Стек ошибки:\n');
+                for i = 1:length(ME.stack)
+                    fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+                end
+                
+                % Не показывать ошибку пользователю для выделения (не критичная операция)
+                % Можно раскомментировать, если нужно показывать ошибки:
+                % if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                %     uialert(app.UIFigure, ...
+                %         sprintf('Ошибка обработки выделения: %s', ME.message), ...
+                %         'Ошибка выделения', ...
+                %         'Icon', 'warning');
+                % end
+            end
+        end
+        
+        % === Перетаскивание точек на графике ===
+        %
+        % ═══════════════════════════════════════════════════════════════
+        % ВАЖНО: ФУНКЦИИ ДЛЯ ДОБАВЛЕНИЯ В .MLAPP ФАЙЛ
+        % ═══════════════════════════════════════════════════════════════
+        %
+        % Нужно добавить в TableGraphEditor.mlapp следующие методы:
+        %
+        % 1. axPlotButtonDown  (строки ~459-645)
+        %
+        % НЕ нужно добавлять в .mlapp (вынесены в отдельные файлы):
+        % - dragPoint         → helpers/dragPoint.m (вызывается напрямую)
+        % - stopDrag           → helpers/stopDrag.m (вызывается напрямую)
+        % - dragPoint → helpers/dragPoint.m (вызывается из WindowButtonMotionFcn)
+        % - stopDrag → helpers/stopDrag.m (вызывается из WindowButtonUpFcn)
+        % - checkMouseMovement → helpers/checkMouseMovement.m (вызывается таймером)
+        %
+        % Инструкция по добавлению:
+        % ──────────────────────────────────────────────────────────────
+        % 1. Откройте TableGraphEditor.mlapp в App Designer
+        % 2. Перейдите в Code View
+        % 3. Найдите секцию methods (Access = private)
+        % 4. Скопируйте ТОЛЬКО функцию axPlotButtonDown (полностью, со всеми комментариями)
+        %    dragPoint, stopDrag и checkMouseMovement находятся в helpers/ и вызываются автоматически
+        % 5. В Design View выберите компонент axPlot
+        % 6. В Property Inspector найдите "ButtonDownFcn"
+        % 7. Установите: @app.axPlotButtonDown
+        % 8. Сохраните файл
+        %
+        % Примечание: dragPoint и stopDrag находятся в helpers/ и вызываются автоматически через
+        % WindowButtonMotionFcn и WindowButtonUpFcn, которые устанавливаются
+        % программно в axPlotButtonDown. НЕ нужно добавлять их в .mlapp файл!
+        % checkMouseMovement также находится в helpers/ и вызывается таймером.
+        %
+        % ═══════════════════════════════════════════════════════════════
+        
+        function axPlotButtonDown(app, src, event)
+            % AXPLOTBUTTONDOWN Обработчик клика на графике
+            %   Начинает перетаскивание точки при клике на графике
+            %   Вызывает helper функцию findClosestPoint из helpers/
+            %
+            %   ВАЖНО: Этот callback должен быть назначен в Design View:
+            %   1. Выберите компонент axPlot в Design View
+            %   2. В Property Inspector найдите "ButtonDownFcn"
+            %   3. Установите: @app.axPlotButtonDown
+            %   4. Сохраните файл
+            %
+            %   Примечание: Использует CurrentPoint из axes для получения
+            %   точных координат клика в координатах данных.
+            %   CurrentPoint более надежен, чем IntersectionPoint, особенно
+            %   при клике на маркерах точек.
+            
+            fprintf('axPlotButtonDown вызван\n');  % Отладочный вывод
+            
+            try
+                % Проверить, что график существует и валиден
+                if ~isprop(app, 'axPlot') || ~isvalid(app.axPlot)
+                    fprintf('⚠ axPlotButtonDown: axPlot не найден или не валиден\n');
+                    return;
+                end
+                
+                % Получить координаты клика в координатах данных
+                % ВАЖНО: Используем CurrentPoint вместо IntersectionPoint, так как
+                % IntersectionPoint может быть неточным при клике на маркере точки.
+                % CurrentPoint всегда возвращает точные координаты мыши в координатах данных.
+                cp = app.axPlot.CurrentPoint;
+                clickPos = cp(1, 1:2);
+                
+                % Альтернативно, можно попробовать использовать IntersectionPoint,
+                % но только если он доступен и валиден
+                % if isprop(event, 'IntersectionPoint') && ~isempty(event.IntersectionPoint)
+                %     intersectionPos = event.IntersectionPoint(1:2);
+                %     % Проверить, что IntersectionPoint не слишком далеко от CurrentPoint
+                %     if norm(intersectionPos - clickPos) < 0.01 * norm(clickPos)
+                %         clickPos = intersectionPos;
+                %     end
+                % end
+                
+                fprintf('Координаты клика (CurrentPoint): [%.4f, %.4f]\n', clickPos(1), clickPos(2));
+                
+                % Найти ближайшую точку через helper функцию
+                if exist('findClosestPoint', 'file') == 2
+                    pointIndex = findClosestPoint(app, clickPos);
+                else
+                    fprintf('⚠ Функция findClosestPoint не найдена\n');
+                    return;
+                end
+                
+                if isempty(pointIndex)
+                    fprintf('⚠ Точка не найдена (клик слишком далеко от точек)\n');
+                    return;
+                end
+                
+                fprintf('✓ Найдена точка: кривая %d, точка %d\n', pointIndex(1), pointIndex(2));
+                
+                % Сохранить индекс точки и начать перетаскивание (безопасно)
+                if isprop(app, 'selectedPoint')
+                    try
+                        app.selectedPoint = pointIndex;
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.selectedPoint = pointIndex;
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.selectedPoint = pointIndex;
+                end
+                
+                if isprop(app, 'isDragging')
+                    try
+                        app.isDragging = true;
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.isDragging = true;
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.isDragging = true;
+                end
+                
+                if isprop(app, 'dragStartPosition')
+                    try
+                        app.dragStartPosition = clickPos;
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.dragStartPosition = clickPos;
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.dragStartPosition = clickPos;
+                end
+                
+                % Установить callbacks для движения мыши
+                % ВАЖНО: В MATLAB App Designer WindowButtonMotionFcn может не работать
+                % надежно. Используем комбинированный подход:
+                % 1. WindowButtonMotionFcn (если работает)
+                % 2. Таймер для периодической проверки движения мыши (fallback)
+                
+                % Сохранить ссылку на app в UserData для доступа из callbacks
+                app.UIFigure.UserData.dragApp = app;
+                
+                % Установить WindowButtonMotionFcn (основной механизм)
+                % Используем прямые вызовы функций из helpers/
+                app.UIFigure.WindowButtonMotionFcn = @(src,evt) dragPoint(app, src, evt);
+                app.UIFigure.WindowButtonUpFcn = @(src,evt) stopDrag(app, src, evt);
+                
+                % Создать таймер для отслеживания движения мыши (fallback механизм)
+                % Таймер будет проверять позицию мыши каждые 0.05 секунды
+                if isprop(app, 'dragTimer')
+                    try
+                        if isvalid(app.dragTimer)
+                            stop(app.dragTimer);
+                            delete(app.dragTimer);
+                        end
+                    catch
+                    end
+                end
+                
+                % Создать новый таймер
+                % ВАЖНО: Сохраняем app в UserData таймера для доступа из callback
+                dragTimer = timer(...
+                    'ExecutionMode', 'fixedRate', ...
+                    'Period', 0.05, ...  % Проверка каждые 50 мс
+                    'TimerFcn', @(t,~) checkMouseMovement(app, t), ...
+                    'BusyMode', 'drop', ...
+                    'TasksToExecute', Inf);
+                
+                % Сохранить app в UserData таймера для доступа из callback
+                dragTimer.UserData.dragApp = app;
+                
+                % Сохранить таймер в app
+                if isprop(app, 'dragTimer')
+                    try
+                        app.dragTimer = dragTimer;
+                    catch
+                        app.UIFigure.UserData.dragTimer = dragTimer;
+                    end
+                else
+                    app.UIFigure.UserData.dragTimer = dragTimer;
+                end
+                
+                % Сохранить предыдущую позицию мыши для отслеживания движения
+                % В MacOS координаты могут работать по-другому, учитываем это
+                currentMousePos = get(0, 'PointerLocation');
+                if isprop(app, 'lastMousePosition')
+                    try
+                        app.lastMousePosition = currentMousePos;
+                    catch
+                        app.UIFigure.UserData.lastMousePosition = currentMousePos;
+                    end
+                else
+                    app.UIFigure.UserData.lastMousePosition = currentMousePos;
+                end
+                
+                % В MacOS также сохраняем начальные координаты данных
+                if ismac && isprop(app, 'axPlot') && isvalid(app.axPlot)
+                    try
+                        cp = app.axPlot.CurrentPoint;
+                        initialDataPos = cp(1, 1:2);
+                        app.UIFigure.UserData.lastDataPosition = initialDataPos;
+                        fprintf('✓ Начальные координаты данных для MacOS: [%.4f, %.4f]\n', ...
+                            initialDataPos(1), initialDataPos(2));
+                    catch
+                        % Игнорировать ошибки
+                    end
+                end
+                
+                % Запустить таймер
+                start(dragTimer);
+                
+                % Проверить, что таймер действительно запущен
+                if strcmp(get(dragTimer, 'Running'), 'on')
+                    fprintf('✓ Таймер запущен успешно (Running=on)\n');
+                else
+                    fprintf('⚠ Таймер НЕ запущен! (Running=%s)\n', get(dragTimer, 'Running'));
+                end
+                
+                fprintf('✓ Callbacks установлены + таймер запущен (fallback механизм)\n');
+                
+                fprintf('✓ Callbacks установлены\n');
+                
+                % Проверить, что callbacks установлены
+                if ~isempty(app.UIFigure.WindowButtonMotionFcn)
+                    fprintf('✓ WindowButtonMotionFcn установлен\n');
+                else
+                    fprintf('⚠ WindowButtonMotionFcn НЕ установлен!\n');
+                end
+                if ~isempty(app.UIFigure.WindowButtonUpFcn)
+                    fprintf('✓ WindowButtonUpFcn установлен\n');
+                else
+                    fprintf('⚠ WindowButtonUpFcn НЕ установлен!\n');
+                end
+                
+                % Добавить флаг, что перетаскивание действительно началось
+                % (для проверки, что мышь двигалась)
+                if isprop(app, 'dragStartPosition')
+                    try
+                        app.dragStartPosition = clickPos;
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.dragStartPosition = clickPos;
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.dragStartPosition = clickPos;
+                end
+                
+                % Флаг, что мышь двигалась (для отличия клика от перетаскивания)
+                if isprop(app, 'hasMoved')
+                    try
+                        app.hasMoved = false;
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.hasMoved = false;
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.hasMoved = false;
+                end
+                
+                fprintf('✓ Перетаскивание начато (callbacks установлены)\n');
+                
+            catch ME
+                fprintf('Ошибка в axPlotButtonDown: %s\n', ME.message);
+                fprintf('Стек ошибки:\n');
+                for i = 1:length(ME.stack)
+                    fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+                end
+                
+                if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                    uialert(app.UIFigure, ...
+                        sprintf('Ошибка начала перетаскивания: %s', ME.message), ...
+                        'Ошибка перетаскивания', ...
+                        'Icon', 'error');
+                end
+            end
+        end
+        
+        % ПРИМЕЧАНИЕ: dragPoint, stopDrag и checkMouseMovement вынесены в отдельные файлы:
+        % - helpers/dragPoint.m
+        % - helpers/stopDrag.m
+        % - helpers/checkMouseMovement.m
+        %
+        % Эти функции вызываются напрямую из callbacks в axPlotButtonDown
+        % НЕ нужно добавлять методы dragPoint, stopDrag, checkMouseMovement в .mlapp файл!
         
         % === Валидация ===
         % Используйте helper функцию validateData напрямую:
