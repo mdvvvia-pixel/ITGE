@@ -39,8 +39,11 @@ function plotByColumns(app, data)
     end
     
     try
-        % Очистить график
+        % Очистить график перед построением
+        % ВАЖНО: cla очищает все графические объекты на axes
         cla(app.axPlot);
+        % Сбросить состояние hold перед началом построения
+        hold(app.axPlot, 'off');
         hold(app.axPlot, 'on');
         
         % Извлечь метки (первая строка, столбцы 2:end)

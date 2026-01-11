@@ -179,7 +179,16 @@
     },
     
     "git_commit_rules": {
-      "format": "<type>(<scope>): <subject>",
+      "format": "[<date_time>] <type>(<scope>): <subject>",
+      "date_time_required": true,
+      "date_time_format": "YYYY-MM-DD HH:MM:SS",
+      "date_time_source": "system_date",
+      "date_time_procedure": [
+        "Перед созданием коммита ОБЯЗАТЕЛЬНО получить текущую системную дату и время",
+        "Использовать команду 'date \"+%Y-%m-%d %H:%M:%S\"' для получения системной даты и времени",
+        "Добавить дату и время в квадратных скобках в начало сообщения коммита",
+        "НЕ использовать плейсхолдеры - только реальная текущая дата и время"
+      ],
       "types": {
         "feat": "Новая функциональность",
         "fix": "Исправление ошибки",
@@ -212,10 +221,10 @@
       ],
       "template_file": ".gitmessage",
       "examples": [
-        "feat(app): добавлена загрузка переменных из workspace",
-        "fix(graph): исправлена синхронизация таблицы и графика",
-        "docs: обновлена документация по API",
-        "refactor(drag): оптимизирован алгоритм перетаскивания точек"
+        "[2026-01-09 21:48:27] feat(app): добавлена загрузка переменных из workspace",
+        "[2026-01-09 21:48:27] fix(graph): исправлена синхронизация таблицы и графика",
+        "[2026-01-09 21:48:27] docs: обновлена документация по API",
+        "[2026-01-09 21:48:27] refactor(drag): оптимизирован алгоритм перетаскивания точек"
       ]
     }
   },
@@ -281,6 +290,26 @@
         "unix_mac": "date +%Y-%m-%d",
         "windows": "powershell -Command \"Get-Date -Format 'yyyy-MM-dd'\"",
         "python": "from datetime import date; print(date.today().isoformat())"
+      }
+    },
+    "commit_creation_rules": {
+      "date_time_required": true,
+      "procedure": [
+        "Перед созданием коммита ОБЯЗАТЕЛЬНО получить текущую системную дату и время",
+        "Использовать команду 'date \"+%Y-%m-%d %H:%M:%S\"' для получения системной даты и времени",
+        "Добавить дату и время в квадратных скобках в начало сообщения коммита",
+        "Формат: [YYYY-MM-DD HH:MM:SS]",
+        "НЕ использовать плейсхолдеры или примеры дат - только реальная текущая дата и время",
+        "Финальный формат: [<date_time>] <type>(<scope>): <subject>"
+      ],
+      "command_examples": {
+        "unix_mac": "date \"+%Y-%m-%d %H:%M:%S\"",
+        "windows": "powershell -Command \"Get-Date -Format 'yyyy-MM-dd HH:mm:ss'\""
+      },
+      "example": {
+        "command": "date \"+%Y-%m-%d %H:%M:%S\"",
+        "output": "2026-01-09 21:48:27",
+        "commit_message": "[2026-01-09 21:48:27] feat(drag): реализация перетаскивания точек"
       }
     }
   },

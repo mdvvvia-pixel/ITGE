@@ -4,7 +4,7 @@
 %
 %   Добавьте после функции createComponents или в любом месте в methods (Access = private)
 %
-%   Дата обновления: 2026-01-09
+%   Дата обновления: 2026-01-10 (добавлен editModeChanged для режимов редактирования X/Y/XY)
 %
 % ═══════════════════════════════════════════════════════════════════════
 % СПИСОК ФУНКЦИЙ ДЛЯ ДОБАВЛЕНИЯ В .MLAPP ФАЙЛ:
@@ -17,7 +17,9 @@
 % 3. ddPlotTypeValueChanged        (строки ~159-253)
 % 4. btnSaveButtonPushed          (строки ~265-360)
 % 5. tblDataSelectionChanged       (строки ~363-425)
-% 6. axPlotButtonDown             (строки ~459-716)  ← ДЛЯ ПЕРЕТАСКИВАНИЯ
+% 6. tblDataCellEdit                (строки ~460-580)  ← ДЛЯ РЕДАКТИРОВАНИЯ ТАБЛИЦЫ
+% 7. axPlotButtonDown             (строки ~580-716)  ← ДЛЯ ПЕРЕТАСКИВАНИЯ
+% 8. bgEditModeSelectionChanged    (строки ~1118+)  ← ДЛЯ РЕЖИМОВ РЕДАКТИРОВАНИЯ X/Y/XY
 %
 % ПРИМЕЧАНИЕ: dragPoint, stopDrag и checkMouseMovement вынесены в отдельные файлы:
 % - helpers/dragPoint.m
@@ -457,6 +459,324 @@
             end
         end
         
+        % === Редактирование таблицы ===
+        %
+        % ═══════════════════════════════════════════════════════════════
+        % ВАЖНО: ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ В .MLAPP ФАЙЛ
+        % ═══════════════════════════════════════════════════════════════
+        %
+        % Нужно добавить в TableGraphEditor.mlapp следующий метод:
+        %
+        % 1. tblDataCellEdit  (строки ~460-580)
+        %
+        % Инструкция по добавлению:
+        % ──────────────────────────────────────────────────────────────
+        % 1. Откройте TableGraphEditor.mlapp в App Designer
+        % 2. Перейдите в Code View
+        % 3. Найдите секцию methods (Access = private)
+        % 4. Скопируйте функцию tblDataCellEdit (полностью, со всеми комментариями)
+        % 5. В Design View выберите компонент tblData
+        % 6. В Property Inspector найдите "CellEditCallback"
+        % 7. Установите: @app.tblDataCellEdit
+        % 8. Сохраните файл
+        %
+        % ═══════════════════════════════════════════════════════════════
+        
+        function tblDataCellEdit(app, event)
+            % TBLDATACELLEDIT Обработчик редактирования ячейки таблицы
+            %   Валидирует данные и обновляет график
+            %   Вызывается при редактировании ячейки в таблице
+            %
+            %   ВАЖНО: Этот callback должен быть назначен в Design View:
+            %   1. Выберите компонент tblData в Design View
+            %   2. В Property Inspector найдите "CellEditCallback"
+            %   3. Установите: @app.tblDataCellEdit
+            %   4. Сохраните файл
+            %
+            %   Примечание: event содержит:
+            %   - event.Indices - [row, col] индексы измененной ячейки
+            %   - event.NewData - новое значение ячейки
+            %   - event.PreviousData - предыдущее значение ячейки
+            %
+            %   Функция:
+            %   - Проверяет, не является ли ячейка меткой (read-only)
+            %   - Валидирует числовое значение через validateNumericData
+            %   - Обновляет currentData
+            %   - Обновляет график через updateGraph
+            %   - Использует drawnow limitrate для оптимизации
+            
+            fprintf('tblDataCellEdit вызван: row=%d, col=%d\n', ...
+                event.Indices(1), event.Indices(2));  % Отладочный вывод
+            
+            try
+                % Проверить наличие компонента таблицы
+                if ~isprop(app, 'tblData') || ~isvalid(app.tblData)
+                    fprintf('⚠ tblData не найден или не валиден\n');
+                    return;
+                end
+                
+                % Получить индексы измененной ячейки
+                row = event.Indices(1);
+                col = event.Indices(2);
+                
+                % Получить текущий режим построения графика
+                plotType = 'columns';
+                if isprop(app, 'currentPlotType')
+                    try
+                        plotType = app.currentPlotType;
+                    catch
+                        plotType = 'columns';
+                    end
+                end
+                
+                % Проверить, не является ли это меткой
+                if strcmp(plotType, 'columns')
+                    % Режим "по столбцам": первая строка = метки
+                    if row == 1
+                        % Это метка - запретить редактирование
+                        fprintf('⚠ Попытка редактирования метки (row=1) - запрещено\n');
+                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                            uialert(app.UIFigure, ...
+                                'Метки не могут быть отредактированы', ...
+                                'Ошибка редактирования', ...
+                                'Icon', 'warning');
+                        end
+                        
+                        % Восстановить предыдущее значение
+                        % Получить currentData безопасно
+                        currentData = [];
+                        if isprop(app, 'currentData')
+                            try
+                                currentData = app.currentData;
+                            catch
+                                if isfield(app.UIFigure.UserData, 'appData') && ...
+                                   isfield(app.UIFigure.UserData.appData, 'currentData')
+                                    currentData = app.UIFigure.UserData.appData.currentData;
+                                end
+                            end
+                        else
+                            if isfield(app.UIFigure.UserData, 'appData') && ...
+                               isfield(app.UIFigure.UserData.appData, 'currentData')
+                                currentData = app.UIFigure.UserData.appData.currentData;
+                            end
+                        end
+                        
+                        if ~isempty(currentData) && row <= size(currentData, 1) && ...
+                           col <= size(currentData, 2)
+                            app.tblData.Data{row, col} = currentData(row, col);
+                        else
+                            % Если не удалось восстановить, использовать PreviousData
+                            if ~isempty(event.PreviousData)
+                                app.tblData.Data{row, col} = event.PreviousData;
+                            end
+                        end
+                        return;
+                    end
+                else
+                    % Режим "по строкам": первый столбец = метки
+                    if col == 1
+                        % Это метка - запретить редактирование
+                        fprintf('⚠ Попытка редактирования метки (col=1) - запрещено\n');
+                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                            uialert(app.UIFigure, ...
+                                'Метки не могут быть отредактированы', ...
+                                'Ошибка редактирования', ...
+                                'Icon', 'warning');
+                        end
+                        
+                        % Восстановить предыдущее значение
+                        % Получить currentData безопасно
+                        currentData = [];
+                        if isprop(app, 'currentData')
+                            try
+                                currentData = app.currentData;
+                            catch
+                                if isfield(app.UIFigure.UserData, 'appData') && ...
+                                   isfield(app.UIFigure.UserData.appData, 'currentData')
+                                    currentData = app.UIFigure.UserData.appData.currentData;
+                                end
+                            end
+                        else
+                            if isfield(app.UIFigure.UserData, 'appData') && ...
+                               isfield(app.UIFigure.UserData.appData, 'currentData')
+                                currentData = app.UIFigure.UserData.appData.currentData;
+                            end
+                        end
+                        
+                        if ~isempty(currentData) && row <= size(currentData, 1) && ...
+                           col <= size(currentData, 2)
+                            app.tblData.Data{row, col} = currentData(row, col);
+                        else
+                            % Если не удалось восстановить, использовать PreviousData
+                            if ~isempty(event.PreviousData)
+                                app.tblData.Data{row, col} = event.PreviousData;
+                            end
+                        end
+                        return;
+                    end
+                end
+                
+                % Получить новое значение
+                newValue = event.NewData;
+                
+                % Валидировать значение через helper функцию
+                if exist('validateNumericData', 'file') == 2
+                    if ~validateNumericData(newValue)
+                        fprintf('⚠ Валидация не пройдена для значения: %s\n', mat2str(newValue));
+                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                            uialert(app.UIFigure, ...
+                                'Значение должно быть числовым', ...
+                                'Ошибка валидации', ...
+                                'Icon', 'error');
+                        end
+                        
+                        % Восстановить предыдущее значение
+                        % Получить currentData безопасно
+                        currentData = [];
+                        if isprop(app, 'currentData')
+                            try
+                                currentData = app.currentData;
+                            catch
+                                if isfield(app.UIFigure.UserData, 'appData') && ...
+                                   isfield(app.UIFigure.UserData.appData, 'currentData')
+                                    currentData = app.UIFigure.UserData.appData.currentData;
+                                end
+                            end
+                        else
+                            if isfield(app.UIFigure.UserData, 'appData') && ...
+                               isfield(app.UIFigure.UserData.appData, 'currentData')
+                                currentData = app.UIFigure.UserData.appData.currentData;
+                            end
+                        end
+                        
+                        if ~isempty(currentData) && row <= size(currentData, 1) && ...
+                           col <= size(currentData, 2)
+                            app.tblData.Data{row, col} = currentData(row, col);
+                        else
+                            % Если не удалось восстановить, использовать PreviousData
+                            if ~isempty(event.PreviousData)
+                                app.tblData.Data{row, col} = event.PreviousData;
+                            end
+                        end
+                        return;
+                    end
+                else
+                    fprintf('⚠ Функция validateNumericData не найдена\n');
+                    % Продолжить без валидации, если функция не найдена
+                end
+                
+                % Преобразовать в число, если нужно
+                if ischar(newValue) || isstring(newValue)
+                    newValue = str2double(newValue);
+                    % Проверить результат преобразования
+                    if isnan(newValue)
+                        fprintf('⚠ Не удалось преобразовать строку в число: %s\n', char(newValue));
+                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                            uialert(app.UIFigure, ...
+                                'Не удалось преобразовать значение в число', ...
+                                'Ошибка преобразования', ...
+                                'Icon', 'error');
+                        end
+                        % Восстановить предыдущее значение
+                        if ~isempty(event.PreviousData)
+                            app.tblData.Data{row, col} = event.PreviousData;
+                        end
+                        return;
+                    end
+                end
+                
+                % Обновить данные в currentData (безопасно)
+                currentData = [];
+                if isprop(app, 'currentData')
+                    try
+                        currentData = app.currentData;
+                    catch
+                        if isfield(app.UIFigure.UserData, 'appData') && ...
+                           isfield(app.UIFigure.UserData.appData, 'currentData')
+                            currentData = app.UIFigure.UserData.appData.currentData;
+                        end
+                    end
+                else
+                    if isfield(app.UIFigure.UserData, 'appData') && ...
+                       isfield(app.UIFigure.UserData.appData, 'currentData')
+                        currentData = app.UIFigure.UserData.appData.currentData;
+                    end
+                end
+                
+                if isempty(currentData)
+                    fprintf('⚠ currentData пуст, не удалось обновить данные\n');
+                    return;
+                end
+                
+                % Проверить границы
+                if row > size(currentData, 1) || col > size(currentData, 2)
+                    fprintf('⚠ Индексы выходят за пределы данных (row=%d, col=%d, размер=%s)\n', ...
+                        row, col, mat2str(size(currentData)));
+                    return;
+                end
+                
+                % Обновить данные
+                currentData(row, col) = newValue;
+                
+                % Сохранить обновленные данные обратно в app (безопасно)
+                if isprop(app, 'currentData')
+                    try
+                        app.currentData = currentData;
+                    catch
+                        % Если не удалось сохранить в свойство, сохранить в UserData
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.currentData = currentData;
+                    end
+                else
+                    % Сохранить в UserData, если свойство не существует
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.currentData = currentData;
+                end
+                
+                fprintf('✓ Данные обновлены: row=%d, col=%d, newValue=%.4f\n', row, col, newValue);
+                
+                % Обновить график через helper функцию
+                if exist('updateGraph', 'file') == 2
+                    fprintf('Обновление графика после редактирования таблицы...\n');
+                    updateGraph(app);
+                    fprintf('✓ График обновлен\n');
+                else
+                    fprintf('⚠ Функция updateGraph не найдена\n');
+                end
+                
+                % Ограничить частоту обновлений
+                drawnow limitrate;
+                
+            catch ME
+                fprintf('Ошибка в tblDataCellEdit: %s\n', ME.message);
+                fprintf('Стек ошибки:\n');
+                for i = 1:length(ME.stack)
+                    fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+                end
+                
+                % Показать ошибку пользователю
+                if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                    uialert(app.UIFigure, ...
+                        sprintf('Ошибка редактирования: %s', ME.message), ...
+                        'Ошибка редактирования', ...
+                        'Icon', 'error');
+                end
+                
+                % Восстановить предыдущее значение
+                if ~isempty(event.PreviousData)
+                    try
+                        app.tblData.Data{event.Indices(1), event.Indices(2)} = event.PreviousData;
+                    catch
+                        fprintf('⚠ Не удалось восстановить предыдущее значение\n');
+                    end
+                end
+            end
+        end
+        
         % === Перетаскивание точек на графике ===
         %
         % ═══════════════════════════════════════════════════════════════
@@ -551,6 +871,56 @@
                 end
                 
                 fprintf('✓ Найдена точка: кривая %d, точка %d\n', pointIndex(1), pointIndex(2));
+                
+                % Получить исходные координаты точки для применения ограничений режима редактирования
+                % ВАЖНО: Эти координаты должны сохраняться один раз при начале перетаскивания
+                % и использоваться для сохранения координаты, которая не должна изменяться
+                % (в режиме X - сохраняется Y, в режиме Y - сохраняется X)
+                originalCoords = [];
+                if exist('getPointCoordinates', 'file') == 2
+                    originalCoords = getPointCoordinates(app, pointIndex);
+                    
+                    % Проверить валидность полученных координат
+                    if isempty(originalCoords) || length(originalCoords) < 2 || ...
+                       ~isfinite(originalCoords(1)) || ~isfinite(originalCoords(2))
+                        fprintf('⚠ getPointCoordinates вернула невалидные координаты, используются координаты клика\n');
+                        originalCoords = clickPos;
+                    end
+                    
+                    fprintf('Исходные координаты точки (из данных): [%.4f, %.4f]\n', ...
+                        originalCoords(1), originalCoords(2));
+                else
+                    % Если функция не найдена, использовать координаты клика
+                    fprintf('⚠ getPointCoordinates не найдена, используются координаты клика\n');
+                    originalCoords = clickPos;
+                end
+                
+                % Проверить валидность перед сохранением
+                if isempty(originalCoords) || length(originalCoords) < 2 || ...
+                   ~isfinite(originalCoords(1)) || ~isfinite(originalCoords(2))
+                    fprintf('⚠ Исходные координаты не валидны, пропуск сохранения\n');
+                else
+                    % Сохранить исходные координаты для применения ограничений
+                    % Эти координаты будут использоваться для сохранения фиксированной координаты
+                    if isprop(app, 'dragStartCoordinates')
+                        try
+                            app.dragStartCoordinates = originalCoords;
+                            fprintf('✓ Исходные координаты сохранены в dragStartCoordinates\n');
+                        catch
+                            if ~isfield(app.UIFigure.UserData, 'appData')
+                                app.UIFigure.UserData.appData = struct();
+                            end
+                            app.UIFigure.UserData.appData.dragStartCoordinates = originalCoords;
+                            fprintf('✓ Исходные координаты сохранены в UserData.appData.dragStartCoordinates\n');
+                        end
+                    else
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.dragStartCoordinates = originalCoords;
+                        fprintf('✓ Исходные координаты сохранены в UserData.appData.dragStartCoordinates (свойство не существует)\n');
+                    end
+                end
                 
                 % Сохранить индекс точки и начать перетаскивание (безопасно)
                 if isprop(app, 'selectedPoint')
@@ -766,4 +1136,131 @@
         % === Валидация ===
         % Используйте helper функцию validateData напрямую:
         %   isValid = validateData(app, data);
+        
+        % === Режимы редактирования ===
+        %
+        % ═══════════════════════════════════════════════════════════════
+        % ВАЖНО: ФУНКЦИЯ ДЛЯ ДОБАВЛЕНИЯ В .MLAPP ФАЙЛ
+        % ═══════════════════════════════════════════════════════════════
+        %
+        % Нужно добавить в TableGraphEditor.mlapp следующий метод:
+        %
+        % 1. bgEditModeSelectionChanged  (ниже)
+        %
+        % Инструкция по добавлению:
+        % ──────────────────────────────────────────────────────────────
+        % 1. Откройте TableGraphEditor.mlapp в App Designer
+        % 2. Перейдите в Code View
+        % 3. Найдите секцию methods (Access = private)
+        % 4. Скопируйте функцию bgEditModeSelectionChanged
+        % 5. В Design View настройте callback для группы bgEditMode:
+        %    - Выберите bgEditMode (uibuttongroup) → Property Inspector
+        %    - Найдите "SelectionChangedFcn"
+        %    - Установите: @app.bgEditModeSelectionChanged
+        % 6. Сохраните файл
+        %
+        % ПРИМЕЧАНИЕ: Radio buttons (rbModeX, rbModeY, rbModeXY) находятся внутри
+        % группы bgEditMode. Callback должен быть назначен только для группы,
+        % а не для отдельных radio buttons!
+        %
+        % ═══════════════════════════════════════════════════════════════
+        
+        function bgEditModeSelectionChanged(app, event)
+            % BGEDITMODESELECTIONCHANGED Обработчик изменения режима редактирования
+            %   Вызывается при выборе нового режима редактирования в группе bgEditMode
+            %   Обновляет свойство app.editMode на основе выбранного radio button
+            %
+            %   ВАЖНО: Этот callback должен быть назначен в Design View для группы bgEditMode:
+            %   1. Выберите bgEditMode (uibuttongroup) в Design View
+            %   2. В Property Inspector найдите "SelectionChangedFcn"
+            %   3. Установите: @app.bgEditModeSelectionChanged
+            %   4. Сохраните файл
+            %
+            %   Radio buttons (rbModeX, rbModeY, rbModeXY) должны быть внутри группы bgEditMode.
+            %   Callback НЕ нужно назначать для отдельных radio buttons!
+            
+            fprintf('bgEditModeSelectionChanged вызван\n');  % Отладочный вывод
+            
+            try
+                % Проверить, что группа bgEditMode существует
+                if ~isprop(app, 'bgEditMode') || ~isvalid(app.bgEditMode)
+                    fprintf('⚠ bgEditMode не найден или не валиден\n');
+                    return;
+                end
+                
+                % Получить выбранный radio button из группы
+                % В MATLAB App Designer uibuttongroup имеет свойство SelectedObject,
+                % которое содержит ссылку на выбранный radio button
+                selectedButton = app.bgEditMode.SelectedObject;
+                
+                if isempty(selectedButton)
+                    fprintf('⚠ Выбранный radio button не найден\n');
+                    return;
+                end
+                
+                % Определить режим редактирования на основе выбранного radio button
+                newMode = 'XY';  % По умолчанию
+                
+                % Сравнить выбранный radio button с известными radio buttons
+                if isprop(app, 'rbModeX') && isvalid(app.rbModeX) && selectedButton == app.rbModeX
+                    newMode = 'X';
+                elseif isprop(app, 'rbModeY') && isvalid(app.rbModeY) && selectedButton == app.rbModeY
+                    newMode = 'Y';
+                elseif isprop(app, 'rbModeXY') && isvalid(app.rbModeXY) && selectedButton == app.rbModeXY
+                    newMode = 'XY';
+                else
+                    % Fallback: попробовать определить по имени компонента
+                    try
+                        buttonName = selectedButton.Tag;
+                        if contains(buttonName, 'rbModeX', 'IgnoreCase', true)
+                            newMode = 'X';
+                        elseif contains(buttonName, 'rbModeY', 'IgnoreCase', true)
+                            newMode = 'Y';
+                        elseif contains(buttonName, 'rbModeXY', 'IgnoreCase', true)
+                            newMode = 'XY';
+                        end
+                    catch
+                        fprintf('⚠ Не удалось определить режим по имени компонента\n');
+                    end
+                end
+                
+                fprintf('Выбран режим редактирования: %s\n', newMode);
+                
+                % Сохранить режим в app.editMode (безопасно)
+                if isprop(app, 'editMode')
+                    try
+                        app.editMode = newMode;
+                        fprintf('✓ editMode установлен: %s\n', newMode);
+                    catch
+                        % Сохранить в UserData, если не удалось установить свойство
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.editMode = newMode;
+                        fprintf('editMode сохранен в UserData: %s\n', newMode);
+                    end
+                else
+                    % Сохранить в UserData, если свойство не существует
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.editMode = newMode;
+                    fprintf('editMode сохранен в UserData (свойство не существует): %s\n', newMode);
+                end
+                
+            catch ME
+                fprintf('Ошибка в bgEditModeSelectionChanged: %s\n', ME.message);
+                fprintf('Стек ошибки:\n');
+                for i = 1:length(ME.stack)
+                    fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+                end
+                
+                if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
+                    uialert(app.UIFigure, ...
+                        sprintf('Ошибка изменения режима редактирования: %s', ME.message), ...
+                        'Ошибка', ...
+                        'Icon', 'error');
+                end
+            end
+        end
 
