@@ -40,8 +40,36 @@ function plotByColumns(app, data)
     
     try
         % Очистить график перед построением
-        % ВАЖНО: cla очищает все графические объекты на axes
+        % ВАЖНО: cla очищает все графические объекты на axes, но легенда может остаться
+        % Явно удалить легенду перед очисткой
+        try
+            if ~isempty(app.axPlot.Legend) && isvalid(app.axPlot.Legend)
+                delete(app.axPlot.Legend);
+            end
+        catch
+            % Игнорировать ошибки при удалении легенды
+        end
+        
+        % Очистить все графические объекты (включая линии, маркеры и т.д.)
         cla(app.axPlot);
+        
+        % ВАЖНО: Убедиться, что все графические объекты (линии) удалены
+        % Иногда cla не удаляет все объекты, особенно если они были созданы недавно
+        % Удаляем только линии, не трогая другие элементы (например, текстовые аннотации)
+        children = app.axPlot.Children;
+        if ~isempty(children)
+            linesToDelete = [];
+            for i = 1:length(children)
+                if isa(children(i), 'matlab.graphics.chart.primitive.Line')
+                    linesToDelete = [linesToDelete, i];
+                end
+            end
+            if ~isempty(linesToDelete)
+                fprintf('⚠ plotByColumns: после cla остались линии (%d), удаление...\n', length(linesToDelete));
+                delete(children(linesToDelete));
+            end
+        end
+        
         % Сбросить состояние hold перед началом построения
         hold(app.axPlot, 'off');
         hold(app.axPlot, 'on');
@@ -196,7 +224,18 @@ function plotByColumns(app, data)
         xlabel(app.axPlot, 'X');
         ylabel(app.axPlot, 'Y');
         title(app.axPlot, 'Table-Graph Editor (By Columns)');
-        legend(app.axPlot, 'show', 'Location', 'best');
+        
+        % ВАЖНО: Убедиться, что старая легенда удалена перед созданием новой
+        % Это предотвращает накопление записей в легенде
+        if ~isempty(app.axPlot.Legend)
+            delete(app.axPlot.Legend);
+        end
+        
+        % Создать новую легенду только если есть кривые
+        if curvesPlotted > 0
+            legend(app.axPlot, 'show', 'Location', 'best');
+        end
+        
         grid(app.axPlot, 'on');
         
         fprintf('✓ График построен успешно (%d кривых из %d запрошенных)\n', curvesPlotted, numCurves);

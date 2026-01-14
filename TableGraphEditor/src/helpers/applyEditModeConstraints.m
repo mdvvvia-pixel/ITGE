@@ -38,7 +38,7 @@ function constrainedPosition = applyEditModeConstraints(app, mousePosition, orig
     end
     
     % Получить режим редактирования (безопасно)
-    editMode = 'XY';  % По умолчанию
+    editMode = 'Y';  % По умолчанию 'Y' (режим редактирования только по Y)
     if isprop(app, 'editMode')
         try
             editMode = app.editMode;
@@ -47,19 +47,21 @@ function constrainedPosition = applyEditModeConstraints(app, mousePosition, orig
                isfield(app.UIFigure.UserData.appData, 'editMode')
                 editMode = app.UIFigure.UserData.appData.editMode;
             else
-                editMode = 'XY';
+                editMode = 'Y';  % По умолчанию 'Y'
             end
         end
     else
         if isfield(app.UIFigure.UserData, 'appData') && ...
            isfield(app.UIFigure.UserData.appData, 'editMode')
             editMode = app.UIFigure.UserData.appData.editMode;
+        else
+            editMode = 'Y';  % По умолчанию 'Y'
         end
     end
     
     % Проверить валидность режима
     if ~ischar(editMode) && ~isstring(editMode)
-        editMode = 'XY';
+        editMode = 'Y';  % По умолчанию 'Y'
     end
     
     editMode = upper(char(editMode));

@@ -12,14 +12,15 @@
 %
 % ОБЯЗАТЕЛЬНО добавить в TableGraphEditor.mlapp:
 %
-% 1. startupFcn                    (строки ~10-75)
-% 2. ddVariableValueChanged        (строки ~93-156)
-% 3. ddPlotTypeValueChanged        (строки ~159-253)
-% 4. btnSaveButtonPushed          (строки ~265-360)
-% 5. tblDataSelectionChanged       (строки ~363-425)
-% 6. tblDataCellEdit                (строки ~460-580)  ← ДЛЯ РЕДАКТИРОВАНИЯ ТАБЛИЦЫ
-% 7. axPlotButtonDown             (строки ~580-716)  ← ДЛЯ ПЕРЕТАСКИВАНИЯ
-% 8. bgEditModeSelectionChanged    (строки ~1118+)  ← ДЛЯ РЕЖИМОВ РЕДАКТИРОВАНИЯ X/Y/XY
+% 1. startupFcn                    (строки ~45-110)
+% 2. ddVariableDropDownOpening     (строки ~142-172)  ← ДЛЯ ОБНОВЛЕНИЯ СПИСКА ПЕРЕМЕННЫХ
+% 3. ddVariableValueChanged        (строки ~174-237)
+% 4. ddPlotTypeValueChanged        (строки ~239-333)
+% 5. btnSaveButtonPushed          (строки ~328-423)
+% 6. tblDataSelectionChanged       (строки ~426-488)
+% 7. tblDataCellEdit                (строки ~523-643)  ← ДЛЯ РЕДАКТИРОВАНИЯ ТАБЛИЦЫ
+% 8. axPlotButtonDown             (строки ~643-779)  ← ДЛЯ ПЕРЕТАСКИВАНИЯ
+% 9. bgEditModeSelectionChanged    (строки ~1181+)  ← ДЛЯ РЕЖИМОВ РЕДАКТИРОВАНИЯ X/Y/XY
 %
 % ПРИМЕЧАНИЕ: dragPoint, stopDrag и checkMouseMovement вынесены в отдельные файлы:
 % - helpers/dragPoint.m
@@ -35,9 +36,12 @@
 % 2. Перейдите в Code View
 % 3. Найдите секцию methods (Access = private)
 % 4. Скопируйте нужные функции из этого файла
-% 5. Для axPlotButtonDown: в Design View выберите axPlot → Property Inspector
+% 5. Для ddVariable: в Design View выберите ddVariable → Property Inspector
+%    → OpeningFcn → установите: @app.ddVariableDropDownOpening
+%    → ValueChangedFcn → установите: @app.ddVariableValueChanged
+% 6. Для axPlotButtonDown: в Design View выберите axPlot → Property Inspector
 %    → ButtonDownFcn → установите: @app.axPlotButtonDown
-% 6. Сохраните файл
+% 7. Сохраните файл
 %
 % ═══════════════════════════════════════════════════════════════════════
 
@@ -72,15 +76,29 @@
                     return;
                 end
                 
-                % Назначить callback программно (если не назначен)
-                % Сначала проверяем, что метод существует
+                % Назначить callbacks программно (если не назначены)
+                % Сначала проверяем, что методы существуют
+                if ismethod(app, 'ddVariableDropDownOpening')
+                    if isempty(app.ddVariable.OpeningFcn)
+                        fprintf('Назначение callback ddVariableDropDownOpening программно...\n');
+                        app.ddVariable.OpeningFcn = @app.ddVariableDropDownOpening;
+                        fprintf('✓ OpeningFcn callback назначен\n');
+                    else
+                        fprintf('✓ OpeningFcn callback уже назначен\n');
+                    end
+                else
+                    fprintf('⚠ Метод ddVariableDropDownOpening не найден!\n');
+                    fprintf('  Необходимо добавить метод в .mlapp файл\n');
+                    fprintf('  Скопируйте метод из METHODS_FOR_MLAPP.m\n');
+                end
+                
                 if ismethod(app, 'ddVariableValueChanged')
                     if isempty(app.ddVariable.ValueChangedFcn)
                         fprintf('Назначение callback ddVariableValueChanged программно...\n');
                         app.ddVariable.ValueChangedFcn = @app.ddVariableValueChanged;
-                        fprintf('✓ Callback назначен\n');
+                        fprintf('✓ ValueChangedFcn callback назначен\n');
                     else
-                        fprintf('✓ Callback уже назначен\n');
+                        fprintf('✓ ValueChangedFcn callback уже назначен\n');
                     end
                 else
                     fprintf('⚠ Метод ddVariableValueChanged не найден!\n');
@@ -90,6 +108,39 @@
                 
                 % Обновить список переменных
                 updateVariableDropdown(app);
+                
+                % Установить режим редактирования 'Y' по умолчанию
+                % ВАЖНО: Режим 'Y' устанавливается при запуске программы
+                if isprop(app, 'editMode')
+                    try
+                        app.editMode = 'Y';
+                        fprintf('✓ Режим редактирования установлен: Y (по умолчанию)\n');
+                    catch
+                        if ~isfield(app.UIFigure.UserData, 'appData')
+                            app.UIFigure.UserData.appData = struct();
+                        end
+                        app.UIFigure.UserData.appData.editMode = 'Y';
+                        fprintf('✓ Режим редактирования сохранен в UserData: Y (по умолчанию)\n');
+                    end
+                else
+                    if ~isfield(app.UIFigure.UserData, 'appData')
+                        app.UIFigure.UserData.appData = struct();
+                    end
+                    app.UIFigure.UserData.appData.editMode = 'Y';
+                    fprintf('✓ Режим редактирования сохранен в UserData: Y (по умолчанию)\n');
+                end
+                
+                % Установить выбранный radio button в группе bgEditMode (если существует)
+                if isprop(app, 'bgEditMode') && isvalid(app.bgEditMode)
+                    if isprop(app, 'rbModeY') && isvalid(app.rbModeY)
+                        try
+                            app.bgEditMode.SelectedObject = app.rbModeY;
+                            fprintf('✓ Radio button rbModeY установлен как выбранный\n');
+                        catch ME
+                            fprintf('⚠ Не удалось установить rbModeY: %s\n', ME.message);
+                        end
+                    end
+                end
                 
                 fprintf('✓ Инициализация завершена успешно\n');
                 
@@ -124,6 +175,42 @@
         %
         % Helper функция из helpers/loadVariableFromWorkspace.m будет
         % вызываться автоматически из ddVariableValueChanged
+        
+        function ddVariableDropDownOpening(app, event)
+            % DDVARIABLEDROPDOWNOPENING Обработчик открытия dropdown
+            %   Обновляет список переменных из workspace при открытии dropdown
+            %   Вызывает helper функцию updateVariableDropdown из helpers/
+            %
+            %   ВАЖНО: Этот callback должен быть назначен в Design View:
+            %   1. Выберите компонент ddVariable в Design View
+            %   2. В Property Inspector найдите "OpeningFcn"
+            %   3. Установите: @app.ddVariableDropDownOpening
+            %   4. Сохраните файл
+            %
+            %   Это позволяет обновлять список переменных каждый раз,
+            %   когда пользователь открывает dropdown, даже если переменные
+            %   в Workspace изменились во время работы программы.
+            %
+            %   ПРИМЕЧАНИЕ: Если метод добавлен в .mlapp файл, callback
+            %   может быть назначен программно в startupFcn (автоматически).
+            
+            fprintf('ddVariableDropDownOpening вызван - обновление списка переменных\n');
+            
+            try
+                % Обновить список переменных из workspace
+                updateVariableDropdown(app);
+                fprintf('✓ Список переменных обновлен\n');
+            catch ME
+                fprintf('Ошибка обновления списка переменных: %s\n', ME.message);
+                fprintf('Стек ошибки:\n');
+                for i = 1:length(ME.stack)
+                    fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+                end
+                
+                % Не показываем ошибку пользователю, чтобы не мешать работе
+                % Просто логируем ошибку
+            end
+        end
         
         function ddVariableValueChanged(app, event)
             % DDVARIABLEVALUECHANGED Обработчик выбора переменной

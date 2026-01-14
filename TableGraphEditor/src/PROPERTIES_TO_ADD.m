@@ -10,7 +10,7 @@ properties (SetAccess = public)
     originalData        % Исходные данные (полная матрица)
     currentData         % Текущие редактируемые данные
     selectedVariable    % Выбранная переменная из workspace
-    editMode = 'XY'     % Режим редактирования: 'XY'
+    editMode = 'Y'      % Режим редактирования: 'X', 'Y', или 'XY' (по умолчанию 'Y')
     currentPlotType = 'columns' % 'columns' или 'rows'
     
     % === Выбор части данных ===

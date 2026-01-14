@@ -127,12 +127,84 @@ function pointIndex = findClosestPoint(app, clickPosition)
             (clickPosition(2) - yLim(1)) / yRangeNorm
         ];
         
-        minDistance = inf;
+        % АЛГОРИТМ: Так как у всех кривых одинаковые X координаты (в режиме "по столбцам"),
+        % сначала находим ближайшую координату X, затем среди точек с этим X выбираем ближайшую по Y.
+        % Это более логично и соответствует ожиданиям пользователя.
+        
+        % Шаг 1: Найти все уникальные X координаты и определить ближайшую к клику
+        allXCoords = [];
+        for curveIdx = 1:length(children)
+            if isa(children(curveIdx), 'matlab.graphics.chart.primitive.Line')
+                line = children(curveIdx);
+                xData = line.XData;
+                if ~isempty(xData)
+                    allXCoords = [allXCoords, xData];
+                end
+            end
+        end
+        
+        % Получить уникальные X координаты
+        uniqueXCoords = unique(allXCoords);
+        uniqueXCoords = uniqueXCoords(isfinite(uniqueXCoords));
+        
+        if isempty(uniqueXCoords)
+            fprintf('⚠ findClosestPoint: не найдено валидных X координат\n');
+            pointIndex = [];
+            return;
+        end
+        
+        % Найти ближайшую X координату к клику
+        clickX = clickPosition(1);
+        xDistances = abs(uniqueXCoords - clickX);
+        [~, closestXIdx] = min(xDistances);
+        closestX = uniqueXCoords(closestXIdx);
+        
+        fprintf('  Ближайшая X координата: %.4f (клик: %.4f, расстояние: %.4f)\n', ...
+            closestX, clickX, xDistances(closestXIdx));
+        
+        % Шаг 2: Найти все точки на всех кривых с этой X координатой
+        % и выбрать ближайшую по Y координате, учитывая z-order
+        minYDistance = inf;
         pointIndex = [];
         bestCurveIdx = [];
         bestPointIdx = [];
         
-        % Проверить каждую линию (кривую) на графике
+        % ВАЖНО: Перебираем кривые в прямом порядке (от верхней к нижней), чтобы
+        % при визуальном перекрытии выбирать верхнюю кривую.
+        % В MATLAB последняя нарисованная кривая находится визуально "сверху".
+        %
+        % ПОРЯДОК В Children (обратный порядку построения):
+        % При построении по столбцам: yColumns = [2, 3, 4]
+        % - Первая нарисованная: Column 2 → Children(3) (нижняя)
+        % - Вторая нарисованная: Column 3 → Children(2) (средняя)
+        % - Третья нарисованная: Column 4 → Children(1) (верхняя, визуально сверху)
+        %
+        % Children(1) = верхняя кривая (последняя нарисованная)
+        % Children(3) = нижняя кривая (первая нарисованная)
+        %
+        % Меньший индекс = выше в z-order
+        %
+        % Добавить отладочный вывод для проверки порядка кривых
+        fprintf('  Всего кривых на графике: %d\n', length(children));
+        for debugIdx = 1:length(children)
+            if isa(children(debugIdx), 'matlab.graphics.chart.primitive.Line')
+                debugLine = children(debugIdx);
+                if ~isempty(debugLine.XData) && ~isempty(debugLine.YData) && length(debugLine.XData) >= 2
+                    % Определить позицию кривой для отладки
+                    if debugIdx == 1
+                        positionStr = 'верхняя';
+                    elseif debugIdx == length(children)
+                        positionStr = 'нижняя';
+                    else
+                        positionStr = 'средняя';
+                    end
+                    fprintf('  Children(%d): X=%.4f, Y=%.4f (точка 2) - %s\n', ...
+                        debugIdx, debugLine.XData(2), debugLine.YData(2), positionStr);
+                end
+            end
+        end
+        
+        % Перебираем в прямом порядке (от верхней к нижней), чтобы приоритет был у верхней кривой
         for curveIdx = 1:length(children)
             if isa(children(curveIdx), 'matlab.graphics.chart.primitive.Line')
                 line = children(curveIdx);
@@ -144,46 +216,124 @@ function pointIndex = findClosestPoint(app, clickPosition)
                     continue;
                 end
                 
-                % Вычислить расстояния до всех точек этой кривой
-                % ВАЖНО: Используем нормализованные координаты для учета разных масштабов осей
+                % Найти точки с ближайшей X координатой
+                % Используем небольшой порог для учета погрешностей округления
+                xTolerance = 1e-6 * xRangeNorm; % Очень маленький порог для сравнения X
                 
                 for pointIdx = 1:length(xData)
-                    point = [xData(pointIdx), yData(pointIdx)];
+                    pointX = xData(pointIdx);
+                    pointY = yData(pointIdx);
                     
                     % Проверить, что точка валидна (не NaN, не Inf)
-                    if ~isfinite(point(1)) || ~isfinite(point(2))
+                    if ~isfinite(pointX) || ~isfinite(pointY)
                         continue;
                     end
                     
-                    % Нормализовать координаты точки
-                    pointNorm = [
-                        (point(1) - xLim(1)) / xRangeNorm,
-                        (point(2) - yLim(1)) / yRangeNorm
-                    ];
+                    % Проверить, что X координата совпадает с ближайшей (в пределах tolerance)
+                    if abs(pointX - closestX) > xTolerance
+                        continue;
+                    end
                     
-                    % Вычислить евклидово расстояние в нормализованных координатах
-                    distanceNorm = norm(clickNorm - pointNorm);
+                    % Вычислить расстояние по Y координате (в нормализованных координатах)
+                    pointYNorm = (pointY - yLim(1)) / yRangeNorm;
+                    clickYNorm = clickNorm(2);
+                    yDistanceNorm = abs(clickYNorm - pointYNorm);
                     
-                    if distanceNorm < minDistance
-                        minDistance = distanceNorm;
+                    fprintf('  Кривая %d, точка %d: X=%.4f, Y=%.4f, расстояние по Y=%.4f\n', ...
+                        curveIdx, pointIdx, pointX, pointY, yDistanceNorm);
+                    
+                    % ВАЖНО: При переборе в прямом порядке (от верхней к нижней)
+                    % первая найденная точка находится на верхней кривой (Children(1)).
+                    % Если точка на верхней кривой находится в пределах разумного порога,
+                    % выбираем её, даже если на нижних кривых есть точки ближе по Y.
+                    % Это соответствует визуальному восприятию пользователя.
+                    %
+                    % Порядок в Children: Children(1) = верхняя, Children(3) = нижняя
+                    % Меньший индекс = выше в z-order
+                    %
+                    % КЛЮЧЕВАЯ ЛОГИКА: Если уже выбрана точка на верхней кривой (меньший curveIdx),
+                    % точка на нижней кривой (больший curveIdx) может заменить её ТОЛЬКО если
+                    % она значительно ближе (более чем на visualOverlapThreshold).
+                    
+                    % Порог для учета визуального перекрытия (в нормализованных координатах)
+                    % Если точка на верхней кривой в пределах этого порога, она выбирается,
+                    % даже если на нижней кривой есть точка ближе по Y
+                    visualOverlapThreshold = distanceThresholdNorm; % Используем тот же порог, что и для проверки валидности
+                    
+                    % Выбрать ближайшую по Y, учитывая z-order
+                    if isempty(bestCurveIdx)
+                        % Первая найденная точка - всегда выбираем (это верхняя кривая при прямом переборе)
+                        minYDistance = yDistanceNorm;
                         bestCurveIdx = curveIdx;
                         bestPointIdx = pointIdx;
+                        fprintf('    → Выбрана (первая точка на этой X, кривая %d, расстояние по Y=%.4f)\n', ...
+                            curveIdx, yDistanceNorm);
+                    elseif curveIdx < bestCurveIdx
+                        % Найдена точка на верхней кривой (меньший индекс = выше в z-order)
+                        % Если она в пределах визуального перекрытия - выбираем её
+                        if yDistanceNorm <= visualOverlapThreshold
+                            fprintf('    → Обновлено (визуальный приоритет верхней кривой): кривая %d вместо %d (расстояние по Y: %.4f <= %.4f)\n', ...
+                                curveIdx, bestCurveIdx, yDistanceNorm, visualOverlapThreshold);
+                            minYDistance = yDistanceNorm;
+                            bestCurveIdx = curveIdx;
+                            bestPointIdx = pointIdx;
+                        else
+                            fprintf('    → Пропущено (верхняя кривая, но слишком далеко по Y: %.4f > %.4f)\n', ...
+                                yDistanceNorm, visualOverlapThreshold);
+                        end
+                    elseif curveIdx > bestCurveIdx
+                        % Найдена точка на нижней кривой (больший индекс = ниже в z-order)
+                        % Может заменить верхнюю ТОЛЬКО если:
+                        % 1. Верхняя кривая НЕ в пределах визуального перекрытия (слишком далеко)
+                        % 2. ИЛИ нижняя кривая значительно ближе (более чем на visualOverlapThreshold)
+                        upperCurveInRange = minYDistance <= visualOverlapThreshold;
+                        
+                        if ~upperCurveInRange
+                            % Верхняя кривая слишком далеко - можно заменить на ближайшую
+                            if yDistanceNorm < minYDistance
+                                fprintf('    → Обновлено (нижняя кривая ближе, верхняя была слишком далеко): кривая %d вместо %d\n', ...
+                                    curveIdx, bestCurveIdx);
+                                minYDistance = yDistanceNorm;
+                                bestCurveIdx = curveIdx;
+                                bestPointIdx = pointIdx;
+                            else
+                                fprintf('    → Пропущено (нижняя кривая дальше, верхняя была слишком далеко)\n');
+                            end
+                        elseif yDistanceNorm < minYDistance - visualOverlapThreshold
+                            % Верхняя кривая в пределах визуального перекрытия, но нижняя значительно ближе
+                            fprintf('    → Обновлено (нижняя кривая значительно ближе): кривая %d вместо %d (расстояние: %.4f < %.4f - %.4f)\n', ...
+                                curveIdx, bestCurveIdx, yDistanceNorm, minYDistance, visualOverlapThreshold);
+                            minYDistance = yDistanceNorm;
+                            bestCurveIdx = curveIdx;
+                            bestPointIdx = pointIdx;
+                        else
+                            fprintf('    → Пропущено (нижняя кривая, но верхняя в пределах визуального перекрытия и не достаточно ближе)\n');
+                        end
+                    else
+                        % curveIdx == bestCurveIdx (та же кривая) - не должно происходить, но на всякий случай
+                        if yDistanceNorm < minYDistance
+                            fprintf('    → Обновлено (та же кривая, ближе точка): точка %d вместо %d\n', ...
+                                pointIdx, bestPointIdx);
+                            minYDistance = yDistanceNorm;
+                            bestPointIdx = pointIdx;
+                        end
                     end
                 end
             end
         end
         
-        % Проверить, что точка найдена и достаточно близко (в нормализованных координатах)
-        if isempty(bestCurveIdx) || minDistance > distanceThresholdNorm
-            fprintf('⚠ findClosestPoint: точка не найдена (minDistance=%.4f, threshold=%.4f)\n', ...
-                minDistance, distanceThresholdNorm);
+        % Проверить, что точка найдена и достаточно близко по Y (в нормализованных координатах)
+        % Используем порог для Y координаты (расстояние по Y должно быть в пределах порога)
+        if isempty(bestCurveIdx) || minYDistance > distanceThresholdNorm
+            fprintf('⚠ findClosestPoint: точка не найдена (minYDistance=%.4f, threshold=%.4f)\n', ...
+                minYDistance, distanceThresholdNorm);
             pointIndex = [];
             return;
         end
         
         pointIndex = [bestCurveIdx, bestPointIdx];
-        fprintf('✓ Найдена ближайшая точка: кривая %d, точка %d (расстояние=%.4f)\n', ...
-            bestCurveIdx, bestPointIdx, minDistance);
+        fprintf('✓ Найдена ближайшая точка: кривая %d, точка %d (расстояние по Y=%.4f, X=%.4f)\n', ...
+            bestCurveIdx, bestPointIdx, minYDistance, closestX);
         
     catch ME
         fprintf('Ошибка в findClosestPoint: %s\n', ME.message);
