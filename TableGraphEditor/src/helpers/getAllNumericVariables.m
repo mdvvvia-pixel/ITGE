@@ -1,5 +1,5 @@
 %% GETALLNUMERICVARIABLES Получить все числовые переменные (прямые и из структур)
-%   Объединяет прямые числовые 2D матрицы и числовые 2D матрицы из структур
+%   Объединяет прямые числовые 2D матрицы/векторы и числовые 2D матрицы/векторы из структур
 %
 %   Использование:
 %       allVars = getAllNumericVariables()
@@ -12,8 +12,9 @@
 %
 %   Описание:
 %       Получает список всех переменных из workspace и находит:
-%       1. Прямые числовые 2D матрицы
-%       2. Числовые 2D матрицы внутри структур (рекурсивно)
+%       1. Прямые числовые 2D матрицы (MxN, M>1, N>1)
+%       2. Прямые числовые векторы (1xK или Kx1, K>1)
+%       3. Числовые 2D матрицы/векторы внутри структур (рекурсивно)
 %       
 %       Возвращает объединенный список с указанием типа каждой переменной.
 %
@@ -57,14 +58,16 @@ function allVars = getAllNumericVariables()
                strcmp(varClass, 'int64') || ...
                strcmp(varClass, 'uint64')
                 
-                % Проверить, что это 2D матрица (исключить скаляры и 1D массивы)
-                if length(wsVars(i).size) == 2 && ...
-                   wsVars(i).size(1) > 1 && ...
-                   wsVars(i).size(2) > 1
-                    % Это прямая числовая 2D матрица
-                    allVars.names{end+1} = varName;
-                    allVars.paths{end+1} = varName;
-                    allVars.types{end+1} = 'direct';
+                % Проверить, что это 2D матрица или вектор (исключить скаляры)
+                sz = wsVars(i).size;
+                if numel(sz) == 2
+                    isMatrix2D = (sz(1) > 1 && sz(2) > 1);
+                    isVector1D = ((sz(1) == 1 && sz(2) > 1) || (sz(2) == 1 && sz(1) > 1));
+                    if isMatrix2D || isVector1D
+                        allVars.names{end+1} = varName;
+                        allVars.paths{end+1} = varName;
+                        allVars.types{end+1} = 'direct';
+                    end
                 end
                 
             elseif strcmp(varClass, 'struct')

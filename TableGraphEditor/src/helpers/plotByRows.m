@@ -1,6 +1,8 @@
 %% PLOTBYROWS Строит график по строкам
-%   Режим "по строкам": строка 1 = X, остальные строки = Y (кривые)
-%   Первый столбец = метки (не участвует в данных)
+%   Новая модель:
+%   - data = Y (MxN)
+%   - X берется из B (ColumnNames): appData.columnNameValues (длина N)
+%   - Метки легенды берутся из A (RowNames): app.rowLabels/appData.rowLabels (длина M)
 %
 %   Использование:
 %       plotByRows(app, data)
@@ -27,8 +29,8 @@ function plotByRows(app, data)
     end
     
     % Проверить минимальный размер данных
-    if size(data, 1) < 2 || size(data, 2) < 2
-        fprintf('⚠ plotByRows: недостаточно данных (нужно минимум 2x2)\n');
+    if size(data, 1) < 1 || size(data, 2) < 2
+        fprintf('⚠ plotByRows: недостаточно данных (нужно минимум 1x2)\n');
         return;
     end
     
@@ -74,40 +76,40 @@ function plotByRows(app, data)
         hold(app.axPlot, 'off');
         hold(app.axPlot, 'on');
         
-        % Извлечь метки (первый столбец, строки 2:end)
-        rowLabels = data(2:end, 1);
-        
-        % Конвертировать метки в cell array строк
+        % Получить метки строк (A) как cellstr
         labelsCell = {};
-        if isnumeric(rowLabels)
-            labelsCell = cellfun(@num2str, num2cell(rowLabels), 'UniformOutput', false);
-        elseif iscell(rowLabels)
-            labelsCell = cellfun(@(x) char(string(x)), rowLabels, 'UniformOutput', false);
-        else
-            labelsCell = cellstr(rowLabels);
+        try
+            if isprop(app, 'rowLabels')
+                labelsCell = app.rowLabels;
+            end
+        catch
+        end
+        if isempty(labelsCell) && isfield(app.UIFigure.UserData, 'appData') && ...
+           isfield(app.UIFigure.UserData.appData, 'rowLabels')
+            labelsCell = app.UIFigure.UserData.appData.rowLabels;
+        end
+        if isempty(labelsCell)
+            labelsCell = cellfun(@num2str, num2cell((1:size(data, 1))'), 'UniformOutput', false);
         end
         
-        % Сохранить метки в свойство app (безопасно)
-        if isprop(app, 'rowLabels')
-            try
-                app.rowLabels = labelsCell;
-            catch
-                % Если не удалось сохранить в свойство, сохранить в UserData
-                if ~isfield(app.UIFigure.UserData, 'appData')
-                    app.UIFigure.UserData.appData = struct();
-                end
-                app.UIFigure.UserData.appData.rowLabels = labelsCell;
-            end
-        else
-            % Сохранить в UserData, если свойство не существует
-            if ~isfield(app.UIFigure.UserData, 'appData')
-                app.UIFigure.UserData.appData = struct();
-            end
-            app.UIFigure.UserData.appData.rowLabels = labelsCell;
+        % Получить X координаты из B (ColumnNames)
+        xData = [];
+        if isfield(app.UIFigure.UserData, 'appData') && ...
+           isfield(app.UIFigure.UserData.appData, 'columnNameValues')
+            xData = app.UIFigure.UserData.appData.columnNameValues;
         end
-        
-        % Извлечь X координаты (строка 1, столбцы 2:end)
-        xData = data(1, 2:end);
+        if isempty(xData)
+            fprintf('⚠ plotByRows: columnNameValues (B) не найдены\n');
+            hold(app.axPlot, 'off');
+            return;
+        end
+        xData = xData(:).';
+        if numel(xData) ~= size(data, 2)
+            fprintf('⚠ plotByRows: длина B (%d) не совпадает с числом столбцов Y (%d)\n', ...
+                numel(xData), size(data, 2));
+            hold(app.axPlot, 'off');
+            return;
+        end
         
         % Проверить, что X данные не пусты
         if isempty(xData)
@@ -143,19 +145,19 @@ function plotByRows(app, data)
             end
         end
         
-        % Если нет выделения или выделение пустое, использовать все строки (кроме первой)
+        % Если нет выделения или выделение пустое, использовать все строки
         if isempty(selectedRows)
-            yRows = 2:numRows;
+            yRows = 1:numRows;
         else
-            % Фильтровать выделенные строки: только те, что > 1 и <= numRows
-            yRows = selectedRows(selectedRows > 1 & selectedRows <= numRows);
+            % Фильтровать выделенные строки: только те, что в [1..numRows]
+            yRows = selectedRows(selectedRows >= 1 & selectedRows <= numRows);
             if isempty(yRows)
                 % Если после фильтрации ничего не осталось, использовать все
-                yRows = 2:numRows;
+                yRows = 1:numRows;
             end
         end
         
-        fprintf('Построение графика: X из строки 1, Y из строк [%s]\n', num2str(yRows));
+        fprintf('Построение графика: X из B (ColumnNames), Y из строк [%s]\n', num2str(yRows));
         
         % Генерация цветов для кривых
         numCurves = length(yRows);
@@ -166,8 +168,8 @@ function plotByRows(app, data)
         for i = 1:numCurves
             row = yRows(i);
             
-            % Извлечь Y данные (строка, столбцы 2:end)
-            yData = data(row, 2:end);
+            % Извлечь Y данные (строка)
+            yData = data(row, :);
             
             % Проверить, что Y данные не пусты
             if isempty(yData)
@@ -187,7 +189,7 @@ function plotByRows(app, data)
             end
             
             % Отфильтровать данные: оставить только валидные пары (X, Y)
-            % validIndices имеет размер исходного массива (2:end столбцов)
+            % validIndices имеет размер исходного массива (N столбцов)
             xDataCurve = xData(validIndices);
             yDataCurve = yData(validIndices);
             
@@ -198,8 +200,8 @@ function plotByRows(app, data)
             end
             
             % Получить метку для легенды
-            labelIdx = row - 1; % Индекс в метках (строки начинаются с 2)
-            rowLabelsToUse = labelsCell; % Использовать локальную переменную
+            labelIdx = row; % индексация 1..M
+            rowLabelsToUse = labelsCell;
             if labelIdx <= length(rowLabelsToUse) && ~isempty(rowLabelsToUse{labelIdx})
                 label = char(string(rowLabelsToUse{labelIdx}));
             else
@@ -220,10 +222,14 @@ function plotByRows(app, data)
         
         hold(app.axPlot, 'off');
         
-        % Настройка осей
-        xlabel(app.axPlot, 'X');
-        ylabel(app.axPlot, 'Y');
-        title(app.axPlot, 'Table-Graph Editor (By Rows)');
+        % Настройка подписей осей/заголовка по требованиям
+        if exist('updateAxesLabels', 'file') == 2
+            updateAxesLabels(app, 'rows');
+        else
+            xlabel(app.axPlot, 'X');
+            ylabel(app.axPlot, '');
+            title(app.axPlot, '');
+        end
         
         % ВАЖНО: Убедиться, что старая легенда удалена перед созданием новой
         % Это предотвращает накопление записей в легенде

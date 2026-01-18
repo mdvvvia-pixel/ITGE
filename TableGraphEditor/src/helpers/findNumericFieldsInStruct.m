@@ -1,5 +1,6 @@
-%% FINDSNUMERICFIELDSINSTRUCT Рекурсивно находит числовые 2D поля в структуре
-%   Находит все числовые 2D матрицы в структуре и возвращает пути к ним
+%% FINDSNUMERICFIELDSINSTRUCT Рекурсивно находит числовые 2D матрицы/векторы в структуре
+%   Находит все числовые 2D матрицы и векторы (1xK/Kx1, K>1) в структуре
+%   и возвращает пути к ним.
 %
 %   Использование:
 %       paths = findNumericFieldsInStruct(structVar, prefix)
@@ -14,7 +15,8 @@
 %
 %   Описание:
 %       Рекурсивно обходит структуру и находит все поля, которые являются
-%       числовыми 2D матрицами. Возвращает полные пути к этим полям.
+%       числовыми 2D матрицами или числовыми векторами (кроме скаляров).
+%       Возвращает полные пути к этим полям.
 %
 %   Пример:
 %       experiment.data = rand(10, 5);
@@ -55,11 +57,14 @@ function paths = findNumericFieldsInStruct(structVar, prefix)
         end
         
         % Проверить тип поля
-        if isnumeric(fieldValue) && ismatrix(fieldValue) && ...
-           ~isempty(fieldValue) && ...
-           size(fieldValue, 1) > 1 && size(fieldValue, 2) > 1
-            % Это числовая 2D матрица - добавить в список
-            paths{end+1} = currentPath;
+        if isnumeric(fieldValue) && ismatrix(fieldValue) && ~isempty(fieldValue)
+            sz = size(fieldValue);
+            isMatrix2D = (numel(sz) == 2 && sz(1) > 1 && sz(2) > 1);
+            isVector1D = (numel(sz) == 2 && ((sz(1) == 1 && sz(2) > 1) || (sz(2) == 1 && sz(1) > 1)));
+            if isMatrix2D || isVector1D
+                % Это числовая 2D матрица или вектор (кроме скаляра) - добавить в список
+                paths{end+1} = currentPath;
+            end
             
         elseif isstruct(fieldValue)
             % Это вложенная структура - рекурсивно обойти

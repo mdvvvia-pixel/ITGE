@@ -78,63 +78,59 @@ function updateTableWithData(app)
         
         fprintf('Данные получены: size=[%s], тип=%s\n', num2str(size(data)), class(data));
         
-        % Определить режим отображения (если свойство существует)
-        if isprop(app, 'currentPlotType')
-            try
-                plotType = app.currentPlotType;
-            catch
-                plotType = 'columns';  % По умолчанию
+        % Новая модель данных:
+        % - data = Y-матрица (MxN)
+        % - RowName/ColumnName берутся из appData.rowLabels / appData.columnLabels
+        displayData = data;
+        
+        % Получить метки строк/столбцов (строки)
+        rowLabels = {};
+        colLabels = {};
+        try
+            if isprop(app, 'rowLabels')
+                rowLabels = app.rowLabels;
             end
-        else
-            plotType = 'columns';  % По умолчанию
+            if isprop(app, 'columnLabels')
+                colLabels = app.columnLabels;
+            end
+        catch
+        end
+        if isempty(rowLabels) || isempty(colLabels)
+            if isfield(app.UIFigure.UserData, 'appData')
+                if isempty(rowLabels) && isfield(app.UIFigure.UserData.appData, 'rowLabels')
+                    rowLabels = app.UIFigure.UserData.appData.rowLabels;
+                end
+                if isempty(colLabels) && isfield(app.UIFigure.UserData.appData, 'columnLabels')
+                    colLabels = app.UIFigure.UserData.appData.columnLabels;
+                end
+            end
         end
         
-        % Извлечь метки и обновить данные в зависимости от режима
-        if strcmp(plotType, 'columns')
-            % Режим "по столбцам": первая строка = метки столбцов
-            % Вся матрица отображается как есть (первая строка с метками)
-            displayData = data;
-            
-            % Сохранить метки столбцов (если свойство существует)
-            if size(data, 1) > 0
-                if isprop(app, 'columnLabels')
-                    try
-                        app.columnLabels = data(1, :);
-                    catch
-                        % Если не получилось, попробовать через UserData
-                        if ~isfield(app.UIFigure.UserData, 'appData')
-                            app.UIFigure.UserData.appData = struct();
-                        end
-                        app.UIFigure.UserData.appData.columnLabels = data(1, :);
-                    end
-                end
-            end
-        else
-            % Режим "по строкам": первый столбец = метки строк
-            % Вся матрица отображается как есть (первый столбец с метками)
-            displayData = data;
-            
-            % Сохранить метки строк (если свойство существует)
-            if size(data, 2) > 0
-                if isprop(app, 'rowLabels')
-                    try
-                        app.rowLabels = data(:, 1);
-                    catch
-                        % Если не получилось, попробовать через UserData
-                        if ~isfield(app.UIFigure.UserData, 'appData')
-                            app.UIFigure.UserData.appData = struct();
-                        end
-                        app.UIFigure.UserData.appData.rowLabels = data(:, 1);
-                    end
-                end
-            end
+        % Фолбэк: если меток нет, использовать нумерацию
+        if isempty(rowLabels)
+            rowLabels = cellfun(@num2str, num2cell((1:size(displayData, 1))'), 'UniformOutput', false);
+        end
+        if isempty(colLabels)
+            colLabels = cellfun(@num2str, num2cell(1:size(displayData, 2)), 'UniformOutput', false);
         end
         
         % Обновить таблицу (если компонент существует)
         if isprop(app, 'tblData') && isvalid(app.tblData)
             try
                 fprintf('Обновление таблицы: size=[%s]\n', num2str(size(displayData)));
-                app.tblData.Data = displayData;
+                app.tblData.Data = displayData; % numeric matrix (Y only)
+                
+                % Установить имена строк/столбцов (только отображение)
+                try
+                    if numel(rowLabels) == size(displayData, 1)
+                        app.tblData.RowName = rowLabels;
+                    end
+                    if numel(colLabels) == size(displayData, 2)
+                        app.tblData.ColumnName = colLabels;
+                    end
+                catch ME
+                    fprintf('Предупреждение: не удалось установить RowName/ColumnName: %s\n', ME.message);
+                end
                 fprintf('✓ Таблица обновлена успешно\n');
             catch ME
                 fprintf('Предупреждение: не удалось обновить таблицу: %s\n', ME.message);

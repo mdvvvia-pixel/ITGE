@@ -84,6 +84,13 @@ function updateGraph(app)
         catch
             plotType = 'columns';
         end
+    elseif isfield(app.UIFigure.UserData, 'appData') && ...
+            isfield(app.UIFigure.UserData.appData, 'currentPlotType')
+        try
+            plotType = app.UIFigure.UserData.appData.currentPlotType;
+        catch
+            plotType = 'columns';
+        end
     end
     fprintf('Тип графика: %s\n', plotType);
     
@@ -97,14 +104,27 @@ function updateGraph(app)
     end
     
     try
-        % Проверить минимальный размер данных
-        if size(currentData, 1) < 2 || size(currentData, 2) < 2
-            fprintf('⚠ updateGraph: недостаточно данных для построения графика (нужно минимум 2x2)\n');
-            cla(app.axPlot);
-            text(app.axPlot, 0.5, 0.5, 'Недостаточно данных для построения графика', ...
-                'HorizontalAlignment', 'center', 'Units', 'normalized');
-            drawnow limitrate;
-            return;
+        % Проверить минимальный размер данных (зависит от режима)
+        if strcmp(plotType, 'columns')
+            % В режиме "по столбцам": нужен минимум 2 точки по X и хотя бы 1 столбец Y
+            if size(currentData, 1) < 2 || size(currentData, 2) < 1
+                fprintf('⚠ updateGraph: недостаточно данных для режима columns (нужно минимум 2x1)\n');
+                cla(app.axPlot);
+                text(app.axPlot, 0.5, 0.5, 'Недостаточно данных для построения графика', ...
+                    'HorizontalAlignment', 'center', 'Units', 'normalized');
+                drawnow limitrate;
+                return;
+            end
+        else
+            % В режиме "по строкам": нужен минимум 2 точки по X и хотя бы 1 строка Y
+            if size(currentData, 1) < 1 || size(currentData, 2) < 2
+                fprintf('⚠ updateGraph: недостаточно данных для режима rows (нужно минимум 1x2)\n');
+                cla(app.axPlot);
+                text(app.axPlot, 0.5, 0.5, 'Недостаточно данных для построения графика', ...
+                    'HorizontalAlignment', 'center', 'Units', 'normalized');
+                drawnow limitrate;
+                return;
+            end
         end
         
         % Построить график в зависимости от типа

@@ -422,7 +422,7 @@
                 % Проверить, что данные загружены
                 if isempty(currentData) || isempty(selectedVariable)
                     uialert(app.UIFigure, ...
-                        'Нет данных для сохранения. Сначала загрузите переменную.', ...
+                         'Нет данных для сохранения. Сначала загрузите переменную.', ...
                         'Ошибка сохранения', ...
                         'Icon', 'warning');
                     return;
@@ -606,102 +606,8 @@
                 row = event.Indices(1);
                 col = event.Indices(2);
                 
-                % Получить текущий режим построения графика
-                plotType = 'columns';
-                if isprop(app, 'currentPlotType')
-                    try
-                        plotType = app.currentPlotType;
-                    catch
-                        plotType = 'columns';
-                    end
-                end
-                
-                % Проверить, не является ли это меткой
-                if strcmp(plotType, 'columns')
-                    % Режим "по столбцам": первая строка = метки
-                    if row == 1
-                        % Это метка - запретить редактирование
-                        fprintf('⚠ Попытка редактирования метки (row=1) - запрещено\n');
-                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
-                            uialert(app.UIFigure, ...
-                                'Метки не могут быть отредактированы', ...
-                                'Ошибка редактирования', ...
-                                'Icon', 'warning');
-                        end
-                        
-                        % Восстановить предыдущее значение
-                        % Получить currentData безопасно
-                        currentData = [];
-                        if isprop(app, 'currentData')
-                            try
-                                currentData = app.currentData;
-                            catch
-                                if isfield(app.UIFigure.UserData, 'appData') && ...
-                                   isfield(app.UIFigure.UserData.appData, 'currentData')
-                                    currentData = app.UIFigure.UserData.appData.currentData;
-                                end
-                            end
-                        else
-                            if isfield(app.UIFigure.UserData, 'appData') && ...
-                               isfield(app.UIFigure.UserData.appData, 'currentData')
-                                currentData = app.UIFigure.UserData.appData.currentData;
-                            end
-                        end
-                        
-                        if ~isempty(currentData) && row <= size(currentData, 1) && ...
-                           col <= size(currentData, 2)
-                            app.tblData.Data{row, col} = currentData(row, col);
-                        else
-                            % Если не удалось восстановить, использовать PreviousData
-                            if ~isempty(event.PreviousData)
-                                app.tblData.Data{row, col} = event.PreviousData;
-                            end
-                        end
-                        return;
-                    end
-                else
-                    % Режим "по строкам": первый столбец = метки
-                    if col == 1
-                        % Это метка - запретить редактирование
-                        fprintf('⚠ Попытка редактирования метки (col=1) - запрещено\n');
-                        if isprop(app, 'UIFigure') && isvalid(app.UIFigure)
-                            uialert(app.UIFigure, ...
-                                'Метки не могут быть отредактированы', ...
-                                'Ошибка редактирования', ...
-                                'Icon', 'warning');
-                        end
-                        
-                        % Восстановить предыдущее значение
-                        % Получить currentData безопасно
-                        currentData = [];
-                        if isprop(app, 'currentData')
-                            try
-                                currentData = app.currentData;
-                            catch
-                                if isfield(app.UIFigure.UserData, 'appData') && ...
-                                   isfield(app.UIFigure.UserData.appData, 'currentData')
-                                    currentData = app.UIFigure.UserData.appData.currentData;
-                                end
-                            end
-                        else
-                            if isfield(app.UIFigure.UserData, 'appData') && ...
-                               isfield(app.UIFigure.UserData.appData, 'currentData')
-                                currentData = app.UIFigure.UserData.appData.currentData;
-                            end
-                        end
-                        
-                        if ~isempty(currentData) && row <= size(currentData, 1) && ...
-                           col <= size(currentData, 2)
-                            app.tblData.Data{row, col} = currentData(row, col);
-                        else
-                            % Если не удалось восстановить, использовать PreviousData
-                            if ~isempty(event.PreviousData)
-                                app.tblData.Data{row, col} = event.PreviousData;
-                            end
-                        end
-                        return;
-                    end
-                end
+                % Новая модель: таблица содержит только Y (все ячейки редактируемые).
+                % Метки отображаются через RowName/ColumnName и не редактируются как ячейки.
                 
                 % Получить новое значение
                 newValue = event.NewData;
@@ -738,11 +644,11 @@
                         
                         if ~isempty(currentData) && row <= size(currentData, 1) && ...
                            col <= size(currentData, 2)
-                            app.tblData.Data{row, col} = currentData(row, col);
+                            app.tblData.Data(row, col) = currentData(row, col);
                         else
                             % Если не удалось восстановить, использовать PreviousData
                             if ~isempty(event.PreviousData)
-                                app.tblData.Data{row, col} = event.PreviousData;
+                                app.tblData.Data(row, col) = event.PreviousData;
                             end
                         end
                         return;
@@ -766,7 +672,7 @@
                         end
                         % Восстановить предыдущее значение
                         if ~isempty(event.PreviousData)
-                            app.tblData.Data{row, col} = event.PreviousData;
+                            app.tblData.Data(row, col) = event.PreviousData;
                         end
                         return;
                     end
@@ -856,7 +762,7 @@
                 % Восстановить предыдущее значение
                 if ~isempty(event.PreviousData)
                     try
-                        app.tblData.Data{event.Indices(1), event.Indices(2)} = event.PreviousData;
+                        app.tblData.Data(event.Indices(1), event.Indices(2)) = event.PreviousData;
                     catch
                         fprintf('⚠ Не удалось восстановить предыдущее значение\n');
                     end
