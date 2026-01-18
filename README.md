@@ -1,0 +1,2 @@
+# ITGE
+Для TableGraphEditor
